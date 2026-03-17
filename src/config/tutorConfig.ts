@@ -76,7 +76,7 @@ export function getLanguageInstruction(): string {
 export function getFormalityInstruction(): string {
   switch (tutorConfig.formality) {
     case 'casual':
-      return 'Maintain a calm, intellectual, yet conversational and friendly demeanour. Talk to the user like a smart friend (use "tu" or "tum"). Avoid being an overly enthusiastic AI bot. Do not use Arav\'s name in every sentence, use it very sparingly to sound natural.';
+      return `Maintain a calm, intellectual, yet conversational and friendly demeanour. Talk to the user like a smart friend (use "tu" or "tum"). Avoid being an overly enthusiastic AI bot. Do not use the student's name in every sentence, use it very sparingly to sound natural.`;
     case 'friendly':
       return 'Be supportive and scholarly but warm. Focus on academic growth playfully.';
     case 'academic':

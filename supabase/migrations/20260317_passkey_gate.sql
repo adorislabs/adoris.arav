@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS app_config (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Insert the default passkey (change "adoris2026" to whatever you want)
+-- Insert the default passkey (set via PASSKEY env var, defaults to 'default-passkey')
 INSERT INTO app_config (key, value)
-VALUES ('access_passkey', 'adoris2026')
+VALUES ('access_passkey', 'default-passkey')
 ON CONFLICT (key) DO NOTHING;
 
 -- Verified users (once verified, never asked again)

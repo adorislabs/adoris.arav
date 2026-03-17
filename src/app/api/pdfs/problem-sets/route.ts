@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server';
 import { generateProblemSet } from '@/lib/llm/problemSetGenerator';
 import { createClient } from '@/lib/supabase/server';
 
+interface InsertData {
+  user_id: string;
+  topic: string;
+  problems: unknown;
+  chapter_id?: string;
+  file_name?: string;
+  chapter_title?: string;
+}
+
 /**
  * POST — Generate a problem set for a specific topic and store in Supabase
  */
@@ -61,7 +70,7 @@ export async function POST(req: Request) {
     );
 
     // Store in Supabase
-    const insertData: any = {
+    const insertData: InsertData = {
       user_id: user.id,
       topic,
       problems: problemSet,

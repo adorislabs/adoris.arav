@@ -34,7 +34,7 @@ ${coverageInstruction}
 
 The JSON must follow exactly this structure:
 {
-  "core_explanation": "A very conversational, Hinglish explanation of the main concept on this page. Pretend you are explaining it directly to your smart friend Arav. DO NOT say 'Hello students', do not address a class, and do not use his name excessively. Make it thorough — cover EVERY topic visible on this page, don't skip even small subtopics or side notes.",
+  "core_explanation": "A very conversational, Hinglish explanation of the main concept on this page. Pretend you are explaining it directly to your smart friend. DO NOT say 'Hello students', do not address a class, and do not use their name excessively. Make it thorough — cover EVERY topic visible on this page, don't skip even small subtopics or side notes.",
   "latex_questions": [
     "A deep reasoning question about the topic. If it involves math, physics, or formulas, MUST use strictly formatted LaTeX inside $...$ or $$...$$ markers."
   ],
