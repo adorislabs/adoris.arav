@@ -54,22 +54,61 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     if (!fileName) return;
 
     async function initSession() {
-      // Always fetch total pages
+      // 1. Always fetch total pages
+      let pages = totalPages;
       try {
         const res = await fetch(`/api/pdfs/pages?chapterId=${id}`);
         const data = await res.json();
         if (data.success) {
-          setTotalPages(data.totalPages);
+          pages = data.totalPages;
+          setTotalPages(pages);
         }
       } catch {
         console.error('Failed to load page count');
       }
 
-      // Check localStorage for an existing session using the UUID
-      const existing = loadSession(id);
-      if (existing && !existing.quizCompleted) {
-        // Session exists and quiz not done — offer resume
-        setSession(existing);
+      // 2. Try fetching session from Database (Cloud First)
+      let cloudSession: SessionState | null = null;
+      try {
+        const res = await fetch(`/api/pdfs/session?chapterId=${id}`);
+        const data = await res.json();
+        if (data.success && data.session) {
+          // Merge basic info we have into the cloud session data
+          cloudSession = {
+            ...data.session,
+            fileName: fileName!,
+            totalPages: pages || 1,
+            chapterPlan: null, // We'll try to load/generate this next
+          };
+        }
+      } catch (err) {
+        console.warn('[Session] Failed to fetch cloud session:', err);
+      }
+
+      // 3. Fallback/Check localStorage
+      const localSession = loadSession(id);
+      
+      const sessionToUse = cloudSession || localSession;
+
+      if (sessionToUse && !sessionToUse.quizCompleted) {
+        // If we have a session but it's missing the chapterPlan (common for cloud restore), fetch/generate it
+        if (!sessionToUse.chapterPlan) {
+          try {
+            const cpRes = await fetch('/api/pdfs/chapter-plan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chapterId: id, fileName: fileName! }),
+            });
+            const cpData = await cpRes.json();
+            if (cpData.success) {
+              sessionToUse.chapterPlan = cpData.chapterPlan;
+            }
+          } catch (err) {
+            console.error('Failed to restore chapter plan:', err);
+          }
+        }
+
+        setSession(sessionToUse);
         setPhase('resume_prompt');
       } else {
         // No session or quiz already completed — start fresh
