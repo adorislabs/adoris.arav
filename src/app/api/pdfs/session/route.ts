@@ -23,6 +23,7 @@ export async function POST(req: Request) {
         user_id: user.id,
         chapter_id: session.id, // Assuming session.id is the chapter UUID
         current_page: session.currentPage,
+        total_pages: session.totalPages,
         mastery_status: session.masteryStatus,
         lesson_plans: session.lessonPlans,
         chat_histories: session.chatHistories,
@@ -85,6 +86,7 @@ export async function GET(req: Request) {
     const session = {
       id: data.chapter_id,
       currentPage: data.current_page,
+      totalPages: data.total_pages,
       masteryStatus: data.mastery_status,
       lessonPlans: data.lesson_plans,
       chatHistories: data.chat_histories,

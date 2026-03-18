@@ -1,12 +1,13 @@
 import { PDFDocument } from 'pdf-lib';
-import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
 
 /**
  * Given a chapter UUID, fetches the `storage_path` from the database,
  * downloads the PDF from the 'pdfs' bucket, and returns it as a Buffer.
+ * Uses the service role client to bypass RLS policies.
  */
 export async function getPdfBufferFromChapterId(chapterId: string): Promise<Buffer> {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   
   // 1. Get the storage_path for this chapter
   const { data: chapter, error: chapterError } = await supabase
