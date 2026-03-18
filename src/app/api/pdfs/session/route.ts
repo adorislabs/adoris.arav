@@ -67,8 +67,9 @@ export async function GET(req: Request) {
     const { data, error } = await supabase
       .from('chapter_sessions')
       .select('*')
-      .eq('user_id', user.id)
       .eq('chapter_id', chapterId)
+      .order('last_updated', { ascending: false })
+      .limit(1)
       .single();
 
     if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"

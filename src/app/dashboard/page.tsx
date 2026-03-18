@@ -10,22 +10,6 @@ interface SessionInfo {
   masteredCount: number; quizCompleted: boolean; lastUpdated: string;
 }
 
-function getSessionInfo(id: string): SessionInfo | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(`adoris_session_${btoa(id)}`);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    return {
-      currentPage: s.currentPage || 0,
-      totalPages: s.totalPages || 0,
-      masteredCount: Object.values(s.masteryStatus || {}).filter((v: any) => v === 'mastered').length,
-      quizCompleted: s.quizCompleted || false,
-      lastUpdated: s.lastUpdated || '',
-    };
-  } catch { return null; }
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const [pdfs, setPdfs] = useState<ChapterPdf[]>([]);
@@ -46,8 +30,31 @@ export default function DashboardPage() {
             }))
           );
           setPdfs(allChapters);
+
+          // Fetch session info from cloud for each chapter
           const infos: Record<string, SessionInfo | null> = {};
-          allChapters.forEach((p: ChapterPdf) => { infos[p.id] = getSessionInfo(p.id); });
+          await Promise.all(
+            allChapters.map(async (p: ChapterPdf) => {
+              try {
+                const sRes = await fetch(`/api/pdfs/session?chapterId=${p.id}`);
+                const sData = await sRes.json();
+                if (sData.success && sData.session) {
+                  const s = sData.session;
+                  infos[p.id] = {
+                    currentPage: s.currentPage || 0,
+                    totalPages: s.totalPages || 0,
+                    masteredCount: Object.values(s.masteryStatus || {}).filter((v: any) => v === 'mastered').length,
+                    quizCompleted: s.quizCompleted || false,
+                    lastUpdated: s.lastUpdated || '',
+                  };
+                } else {
+                  infos[p.id] = null;
+                }
+              } catch {
+                infos[p.id] = null;
+              }
+            })
+          );
           setSessionInfos(infos);
         }
       } catch { /* ignore */ }
