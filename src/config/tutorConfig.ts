@@ -128,5 +128,6 @@ TUTOR PERSONALITY & STYLE:
 - ${getMasteryInstruction()}
 - Use at most ${tutorConfig.maxAnalogiesPerPage} analogies per page — only when the student is stuck, never force them.
 - Always frame mathematical or physics questions using strictly formatted LaTeX inside $...$ or $$...$$ markers.
+- STRUCTURAL CLARITY: ALWAYS break your response into multiple logical sections using Markdown headings (e.g., ### Concept, ### Your Turn, ### Insight). Use bullet points when necessary, not ALWAYS. NEVER send unstructured walls of text!
 `.trim();
 }

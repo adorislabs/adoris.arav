@@ -2,6 +2,11 @@ import { GoogleGenAI } from '@google/genai';
 import { tutorConfig, getTutorPersonalityBlock } from '@/config/tutorConfig';
 import { config } from '@/config';
 
+interface ChatMessage {
+  role: string;
+  content: string;
+}
+
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
 });
@@ -34,12 +39,12 @@ HOW TO RESPOND:
 /**
  * Trim chat history to the configured max to keep context window (and costs) small.
  */
-function trimHistory(history: any[]): any[] {
+function trimHistory(history: ChatMessage[]): ChatMessage[] {
   if (!history || history.length <= tutorConfig.maxHistoryMessages) return history;
   return history.slice(-tutorConfig.maxHistoryMessages);
 }
 
-export async function askTutor(message: string, lessonPlanJson: string, history: any[] = []) {
+export async function askTutor(message: string, lessonPlanJson: string, history: ChatMessage[] = []) {
   try {
     const trimmedHistory = trimHistory(history);
     
@@ -47,7 +52,7 @@ export async function askTutor(message: string, lessonPlanJson: string, history:
 ${getGatekeeperPrompt(lessonPlanJson)}
 
 RECENT CONVERSATION HISTORY (last ${trimmedHistory.length} messages):
-${trimmedHistory.map((m: any) => `${m.role}: ${m.content}`).join('\n')}
+${trimmedHistory.map((m: ChatMessage) => `${m.role}: ${m.content}`).join('\n')}
 
 STUDENT MESSAGE: ${message}
 `;
@@ -66,14 +71,15 @@ STUDENT MESSAGE: ${message}
 /**
  * Hidden Observer Prompt — uses cheaper Flash-Lite model
  */
-export async function extractMasteryData(chatHistory: any[]) {
+export async function extractMasteryData(chatHistory: ChatMessage[]) {
   try {
     const trimmed = trimHistory(chatHistory);
     const prompt = `
-Analyze this chat transcript between a tutor and a student. Output a JSON object detailing:
-1. "confusion_point": Specific concept where the student showed confusion.
-2. "eureka_analogy": Any analogy that caused a 'Eureka' moment.
-3. "mastery_status": One of "not_started", "struggling", "progressing", "mastered".
+Analyze this chat transcript between a tutor and a student. Output a strict JSON object detailing:
+1. "confusion_points": Array of strings (Specific concepts where the student showed confusion).
+2. "gaps": Array of strings (Missing foundational knowledge. If a gap previously existed but the student has now mastered it in recent messages, EXCLUDE it from this list so it does not stack up).
+3. "analogies": Array of strings (Any analogies used by the tutor that caused a 'Eureka' moment).
+4. "mastery_status": One of "not_started", "struggling", "progressing", "mastered".
 
 CHAT TRANSCRIPT:
 ${JSON.stringify(trimmed)}

@@ -34,7 +34,7 @@ ${coverageInstruction}
 
 The JSON must follow exactly this structure:
 {
-  "core_explanation": "A very conversational, Hinglish explanation of the main concept on this page. Pretend you are explaining it directly to your smart friend. DO NOT say 'Hello students', do not address a class, and do not use their name excessively. Make it thorough — cover EVERY topic visible on this page, don't skip even small subtopics or side notes.",
+  "core_explanation": "A very conversational, Hinglish explanation of the main concept on this page. Pretend you are explaining it directly to your smart friend. CRITICAL RULE: YOU MUST USE FREQUENT LINE BREAKS, MARKDOWN HEADINGS (###), AND BULLET POINTS. Do not send giant walls of text. Break it down into digestible, bite-sized sections (e.g., ### Concept, ### Example). DO NOT say 'Hello students', do not address a class, and do not use their name excessively. Make it thorough — cover EVERY topic visible on this page.",
   "latex_questions": [
     "A deep reasoning question about the topic. If it involves math, physics, or formulas, MUST use strictly formatted LaTeX inside $...$ or $$...$$ markers."
   ],
@@ -71,8 +71,18 @@ Ensure LaTeX escapes are properly handled in the string (e.g., \\\\frac).
       }
     });
 
-    const outputText = response.text || '{}';
-    return JSON.parse(outputText);
+    let outputText = response.text || '{}';
+    // Clean markdown wrappers
+    outputText = outputText.replace(/^```(?:json)?\s*|^\s*|\s*```$/g, '');
+    
+    try {
+      return JSON.parse(outputText);
+    } catch (parseError) {
+      console.warn('Initial JSON parse failed, attempting sanitization...', parseError);
+      // Fallback: Replace unescaped control characters (literal newlines, tabs) that break string literals
+      outputText = outputText.replace(/[\n\r\t]+/g, ' ');
+      return JSON.parse(outputText);
+    }
     
   } catch (error) {
     console.error('OCR Error:', error);

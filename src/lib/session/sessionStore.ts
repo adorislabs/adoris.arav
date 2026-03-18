@@ -36,6 +36,12 @@ export interface ChapterPlan {
 
 export type PageMasteryStatus = 'locked' | 'in_progress' | 'mastered';
 
+export interface ObserverState {
+  confusionPoints: string[];
+  gaps: string[];
+  analogies: string[];
+}
+
 export interface SessionState {
   id: string;
   fileName: string;
@@ -45,6 +51,7 @@ export interface SessionState {
   lessonPlans: Record<number, LessonPlan>;
   chatHistories: Record<number, Message[]>;
   masteryStatus: Record<number, PageMasteryStatus>;
+  observerStates: Record<number, ObserverState>;
   quizCompleted: boolean;
   lastUpdated: string;
 }
@@ -127,6 +134,7 @@ export function createInitialSession(
     lessonPlans: {},
     chatHistories: {},
     masteryStatus,
+    observerStates: {},
     quizCompleted: false,
     lastUpdated: new Date().toISOString(),
   };

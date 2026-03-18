@@ -22,19 +22,22 @@ export async function POST(req: Request) {
     const count = (messageCounters.get(counterKey) || 0) + 1;
     messageCounters.set(counterKey, count);
 
+    let observerData = null;
     if (count % tutorConfig.observerFrequency === 0) {
-      extractMasteryData([...(historyContext || []), { role: 'user', content: message }])
-        .then((masteryData) => {
-          if (masteryData) {
-            console.log(`[OBSERVER] Run #${count / tutorConfig.observerFrequency} — Mastery Update:`, masteryData);
-          }
-        })
-        .catch((err) => console.error('[OBSERVER] Failed:', err));
+      try {
+        observerData = await extractMasteryData([...(historyContext || []), { role: 'user', content: message }]);
+        if (observerData) {
+          console.log(`[OBSERVER] Run #${count / tutorConfig.observerFrequency} — Mastery Update:`, observerData);
+        }
+      } catch (err) {
+        console.error('[OBSERVER] Failed:', err);
+      }
     }
 
     return NextResponse.json({
       role: 'assistant',
       content: tutorResponse.success ? tutorResponse.text : 'Sorry, taking a moment to process.',
+      observerData,
     });
   } catch (error) {
     console.error('Chat API Error:', error);

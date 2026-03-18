@@ -314,6 +314,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
           leftPane={<PdfViewer chapterId={id} currentPage={currentPage} />}
           rightPane={
             <ChatInterface 
+              key={currentPage}
               sessionId={id} 
               fileName={fileName!} 
               currentPage={currentPage}

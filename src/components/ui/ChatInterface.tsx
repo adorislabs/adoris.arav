@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import type { Message, LessonPlan, PagePlanEntry, SessionState } from '@/lib/session/sessionStore';
+import type { Message, LessonPlan, PagePlanEntry, SessionState, ObserverState } from '@/lib/session/sessionStore';
 
 interface ChatInterfaceProps {
   sessionId: string;
@@ -35,6 +35,7 @@ export function ChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [lessonPlan, setLessonPlan] = useState<LessonPlan | null>(initialLessonPlan);
   const [topicsChecked, setTopicsChecked] = useState<Record<string, boolean>>({});
+  const [isPageUnlocked, setIsPageUnlocked] = useState(sessionState.masteryStatus[currentPage] === 'mastered');
 
   const displayTimeline = useMemo(() => {
     const items: Array<{ type: 'separator' | 'message'; page: number; message?: Message }> = [];
@@ -43,6 +44,7 @@ export function ChatInterface({
       const pageMessages = page === currentPage ? messages : (sessionState.chatHistories[page] || []);
       if (pageMessages.length === 0) continue;
 
+      // Add a separator for each page
       items.push({ type: 'separator', page });
       for (const message of pageMessages) {
         items.push({ type: 'message', page, message });
@@ -159,8 +161,7 @@ export function ChatInterface({
     };
 
     fetchLessonPlan();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileName, currentPage]);
+  }, [fileName, currentPage, initialLessonPlan, initialMessages.length, pagePlanEntry, persistLessonPlan, persistMessages, sessionId]);
 
   const handleSendQuery = async (userMessage: string) => {
     if (!userMessage.trim() || isLoading) return;
@@ -176,7 +177,7 @@ export function ChatInterface({
 
     // DEV HACK to manually unlock visually
     if (userMessage.toUpperCase() === 'UNLOCK') {
-      onMasteryAchieved();
+      setIsPageUnlocked(true);
       setIsLoading(false);
       return;
     }
@@ -198,19 +199,27 @@ export function ChatInterface({
 
       const aiText = data.content as string;
       
+      if (data.observerData) {
+        onSessionUpdate(prev => ({
+          ...prev,
+          observerStates: {
+            ...prev.observerStates,
+            [currentPage]: data.observerData as ObserverState
+          }
+        }));
+      }
+      
       // Handle programmatic backend unlocking
-      if (aiText.includes('ACHIEVED_MASTERY')) {
-        const cleanedText = aiText.replace('ACHIEVED_MASTERY', '').trim();
+      if (aiText.includes('ACHIEVED_MASTERY') || aiText.includes('[MASTERY_ACHIEVED]')) {
+        const cleanedText = aiText.replace(/ACHIEVED_MASTERY|\[MASTERY_ACHIEVED\]/g, '').trim();
         const finalMsgs: Message[] = [
           ...newMessages,
-          { id: (Date.now() + 1).toString(), role: 'assistant', content: cleanedText || "Excellent! You've mastered this concept. Unlocking next page..." },
+          { id: (Date.now() + 1).toString(), role: 'assistant', content: cleanedText || "Excellent! You've mastered this concept. You can now proceed to the next page." },
         ];
         setMessages(finalMsgs);
         persistMessages(finalMsgs);
         
-        setTimeout(() => {
-          onMasteryAchieved();
-        }, 1500);
+        setIsPageUnlocked(true);
       } else {
         const updatedMsgs: Message[] = [
           ...newMessages,
@@ -254,6 +263,37 @@ export function ChatInterface({
     }
   }, [pagePlanEntry]);
 
+  // Manim Visual Hook Renderer
+  const renderMessageContent = (content: string) => {
+    const parts = content.split(/\[MANIM:(.*?)\]/g);
+    if (parts.length === 1) {
+      return <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{content}</ReactMarkdown>;
+    }
+    return parts.map((part, i) => {
+      // Odd indices are the captured Manim prompts
+      if (i % 2 === 1) {
+        return (
+          <div key={i} className="my-4 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shadow-lg">
+            <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                MANIM VISUALIZATION
+              </span>
+              <span className="text-[9px] text-slate-500 uppercase tracking-wider">Interactive render pending</span>
+            </div>
+            <div className="p-6 flex flex-col items-center justify-center min-h-[140px] text-center">
+              <div className="text-slate-500 mb-2">
+                <svg className="w-8 h-8 mx-auto opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+              </div>
+              <p className="text-sm font-medium text-slate-400 italic">"{part.trim()}"</p>
+            </div>
+          </div>
+        );
+      }
+      return <ReactMarkdown key={i} remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{part}</ReactMarkdown>;
+    });
+  };
+
   return (
     <div className="flex flex-col h-full relative">
       {/* Topic Checklist Header (from Chapter Plan) */}
@@ -279,6 +319,36 @@ export function ChatInterface({
         </div>
       )}
 
+      {/* Observer State Header (Gaps & Analogies) */}
+      {sessionState.observerStates?.[currentPage] && (
+        <div className="border-b px-4 py-2.5 shrink-0 flex flex-wrap gap-4" style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
+          {sessionState.observerStates[currentPage].gaps?.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold text-rose-400 uppercase tracking-wider">Identified Gaps</span>
+              <div className="flex flex-wrap gap-1.5">
+                {sessionState.observerStates[currentPage].gaps.map((gap, idx) => (
+                  <span key={`gap-${idx}`} className="text-[11px] px-2 py-0.5 rounded-full border border-rose-800/50 bg-rose-900/30 text-rose-300">
+                    ⚠ {gap}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {sessionState.observerStates[currentPage].analogies?.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Active Analogies</span>
+              <div className="flex flex-wrap gap-1.5">
+                {sessionState.observerStates[currentPage].analogies.map((ana, idx) => (
+                  <span key={`ana-${idx}`} className="text-[11px] px-2 py-0.5 rounded-full border border-amber-800/50 bg-amber-900/30 text-amber-300">
+                    💡 {ana}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div
             className="flex-1 overflow-y-auto p-4 pb-48 space-y-4"
             style={{ background: 'var(--bg-base)' }}>
@@ -297,109 +367,118 @@ export function ChatInterface({
 
           const m = item.message as Message;
           return (
-            <div key={`${item.page}-${m.id}-${idx}`} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={`${item.page}-${m.id}-${idx}`} className={`flex w-full ${m.role === 'user' ? 'justify-end' : 'justify-start mt-2 mb-6'}`}>
               <div
-                className={`px-0 py-0 max-w-[90%] shadow-sm ${
+                className={`${
                   m.role === 'user'
-                    ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-sm self-end px-4 py-3'
-                    : 'border-0 rounded-2xl rounded-tl-sm self-start'
+                    ? 'bg-indigo-600 text-white max-w-[85%] rounded-2xl rounded-tr-[4px] self-end px-5 py-3 shadow-md'
+                    : 'w-full self-start'
                 }`}
-                style={m.role === 'user' ? {} : { background: 'transparent', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                style={m.role === 'user' ? {} : { color: 'var(--text-primary)' }}
               >
                 {m.role === 'user' ? (
-                  <div className="prose prose-sm max-w-none text-white">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
-                    >
-                      {m.content}
-                    </ReactMarkdown>
+                  <div className="prose prose-sm max-w-none text-white font-medium">
+                    {renderMessageContent(m.content)}
                   </div>
                 ) : (
-                  <div className="prose prose-sm max-w-none text-slate-200 bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 space-y-2">
+                  <div className="prose max-w-none w-full tracking-normal">
                     <style>{`
+                      .prose {
+                        color: #D1D5DB; /* light slate */
+                        max-width: none;
+                        font-size: 0.95rem;
+                        line-height: 1.75;
+                      }
                       .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-                        color: #e2e8f0;
-                        font-weight: 700;
-                        margin-top: 1.25em;
-                        margin-bottom: 0.4em;
+                        color: #FFFFFF;
+                        font-weight: 600;
+                        margin-top: 1.5em;
+                        margin-bottom: 0.75em;
+                        letter-spacing: -0.01em;
                       }
-                      .prose h1 {
-                        font-size: 1.5rem;
-                        border-bottom: 2px solid rgba(148, 163, 184, 0.3);
-                        padding-bottom: 0.4em;
-                      }
-                      .prose h2 {
-                        font-size: 1.25rem;
-                        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-                        padding-bottom: 0.25em;
-                      }
-                      .prose h3 {
-                        font-size: 1.1rem;
-                        color: #94a3b8;
+                      .prose h1 { font-size: 1.5rem; }
+                      .prose h2 { font-size: 1.25rem; }
+                      .prose h3 { font-size: 1.125rem; }
+                      .prose p {
+                        margin-top: 0.75em;
+                        margin-bottom: 0.75em;
                       }
                       .prose ul, .prose ol {
                         padding-left: 1.5em;
-                        margin-bottom: 0.5em;
+                        margin-bottom: 1em;
                       }
                       .prose li {
                         margin-bottom: 0.3em;
                       }
+                      .prose li::marker {
+                        color: #6B7280;
+                      }
                       .prose strong {
-                        color: #f1f5f9;
+                        color: #F3F4F6;
                         font-weight: 600;
                       }
-                      .prose em {
-                        color: #cbd5e1;
-                        font-style: italic;
-                      }
                       .prose code {
-                        background: rgba(15, 23, 42, 0.5);
-                        color: #fbbf24;
+                        background: rgba(31, 41, 55, 0.6);
+                        color: #A78BFA; /* Turbo purple tint */
                         padding: 0.2em 0.4em;
-                        border-radius: 0.25em;
+                        border-radius: 4px;
+                        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                        font-size: 0.85em;
+                        border: 1px solid rgba(255,255,255,0.05);
+                      }
+                      .prose pre {
+                        background: #111827; /* Darker bg for code blocks */
+                        color: #E5E7EB;
+                        padding: 1.25em;
+                        border-radius: 8px;
+                        overflow-x: auto;
+                        border: 1px solid rgba(255,255,255,0.05);
+                        margin: 1.5em 0;
+                        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+                      }
+                      .prose pre code {
+                        background: transparent;
+                        color: inherit;
+                        padding: 0;
+                        border: none;
                         font-size: 0.9em;
                       }
                       .prose blockquote {
-                        border-left: 3px solid rgba(96, 165, 250, 0.5);
-                        padding-left: 1em;
-                        margin-left: 0;
-                        color: #cbd5e1;
+                        border-left: 3px solid #6366F1;
+                        padding-left: 1.25rem;
+                        color: #9CA3AF;
                         font-style: italic;
-                        margin-bottom: 0.5em;
+                        margin: 1.5em 0;
+                        background: linear-gradient(to right, rgba(99, 102, 241, 0.08), transparent);
+                        padding-top: 0.75em;
+                        padding-bottom: 0.75em;
+                        border-radius: 0 8px 8px 0;
                       }
                       .prose table {
-                        border-collapse: collapse;
                         width: 100%;
-                        margin: 0.75em 0;
+                        border-collapse: separate;
+                        border-spacing: 0;
+                        margin: 1.5em 0;
+                        border: 1px solid rgba(255,255,255,0.1);
+                        border-radius: 8px;
+                        overflow: hidden;
                       }
                       .prose th, .prose td {
-                        border: 1px solid rgba(148, 163, 184, 0.2);
-                        padding: 0.5em;
+                        padding: 0.75em 1.25em;
+                        border-bottom: 1px solid rgba(255,255,255,0.05);
                         text-align: left;
                         font-size: 0.9em;
                       }
                       .prose th {
-                        background: rgba(15, 23, 42, 0.5);
-                        color: #f1f5f9;
+                        background: rgba(255,255,255,0.03);
                         font-weight: 600;
+                        color: #F9FAFB;
                       }
-                      .prose hr {
-                        border: none;
-                        border-top: 2px dashed rgba(148, 163, 184, 0.3);
-                        margin: 1em 0;
-                      }
-                      .prose p {
-                        line-height: 1.5;
-                        margin-bottom: 0.5em;
+                      .prose tr:last-child td {
+                        border-bottom: none;
                       }
                     `}</style>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
-                    >
-                      {m.content}
-                    </ReactMarkdown>
+                    {renderMessageContent(m.content)}
                   </div>
                 )}
               </div>
@@ -438,6 +517,16 @@ export function ChatInterface({
                </button>
              ))}
           </div>
+        )}
+
+        {/* Mastery Next Page Button */}
+        {isPageUnlocked && (
+          <button
+            onClick={onMasteryAchieved}
+            className="w-full max-w-4xl mx-auto mb-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3 font-semibold shadow-md transition-all flex items-center justify-center gap-2 animate-fade-in"
+          >
+            Mastery Achieved! Click to Continue ➔
+          </button>
         )}
 
         <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto w-full">

@@ -123,6 +123,9 @@ CRITICAL SCOPE RULE:
 - Every single problem MUST be strictly about the topic "${topic}".
 - Do NOT drift into broader chapter recap.
 - If key concepts are sparse, still generate focused questions from the topic itself.
+- AVOID lengthy story problems or scenarios that don't directly test the concept.
+- Focus on PRACTICAL APPLICATIONS and CORE SKILLS rather than narrative examples.
+- Problems should be CLEAR, CONCISE, and directly test understanding of the topic.
 
 Generate exactly 20 problems. They MUST follow this EXACT progression — the student should feel a natural, scaffolded learning curve:
 
@@ -130,18 +133,21 @@ Generate exactly 20 problems. They MUST follow this EXACT progression — the st
 - Direct definition questions: "What is X?" / "State the formula for Y."
 - True/False with single-concept check
 - MCQ where wrong options are clearly wrong
+- Simple identification or recall questions
 - Goal: Confirm the student knows the basics before anything harder
 
 [GROUP 2] EASY (4 problems — difficulty: "easy", marks: 1-2)
 - One-step formula application with given values
 - Straightforward numerical: plug in and solve
 - No tricks, no multi-step
+- Simple calculation problems
 - Goal: Build confidence with direct use of concepts
 
 [GROUP 3] MEDIUM (5 problems — difficulty: "medium", marks: 2-3)
 - Two-step problems
 - Apply concept in a slightly varied or unfamiliar context
 - Numerical with unit conversion or rearrangement
+- Problems requiring slight interpretation but direct application
 - Goal: Start thinking, not just calculating
 
 [GROUP 4] HARD (4 problems — difficulty: "hard", marks: 3)
@@ -149,6 +155,7 @@ Generate exactly 20 problems. They MUST follow this EXACT progression — the st
 - "Why does this happen?" + numerical combined
 - Error analysis or common misconception trap
 - Reverse problems: given the result, find the input
+- Problems requiring connection of multiple ideas from the topic
 - Goal: Real understanding, not just mechanical application
 
 [GROUP 5] EXAM LEVEL (3 problems — difficulty: "exam_level", marks: 5)
@@ -156,6 +163,7 @@ Generate exactly 20 problems. They MUST follow this EXACT progression — the st
 - Multi-concept integration across the chapter
 - Proof or derivation with application
 - Long answer requiring explanation + calculation + conclusion
+- Problems that synthesize multiple aspects of the topic
 - Goal: Full exam readiness
 
 KEY RULES FOR ALL PROBLEMS:
@@ -164,6 +172,8 @@ KEY RULES FOR ALL PROBLEMS:
 3. Each problem id must be unique like "topic_001", "topic_002" etc.
 4. For MCQ: 4 options, of which the wrong ones must be plausible (not obviously wrong)
 5. Problems must cover DIFFERENT ANGLES of the topic — don't repeat the same question type
+6. AVOID lengthy narratives or stories that obscure the mathematical concept
+7. Focus on the ESSENCE of the topic, not peripheral examples
 
 JSON Output:
 {

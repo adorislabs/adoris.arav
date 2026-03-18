@@ -220,7 +220,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
         const res = await fetch(`/api/pdfs/problem-sets?fileName=${encodeURIComponent(fileName!)}&chapterId=${id}`);
         const data = await res.json();
         if (data.success && data.problemSets) {
-          const mapped = data.problemSets.map((ps: any) => ({
+          const mapped = data.problemSets.map((ps: { topic: string; problems: Problem[] | { problems: Problem[] } }) => ({
             topic: ps.topic,
             problems: Array.isArray(ps.problems) ? ps.problems : (ps.problems?.problems || []),
           }));
@@ -305,9 +305,9 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
       });
       const cpData = await cpRes.json();
       if (cpData.success && cpData.chapterPlan) {
-        const rawTopics = cpData.chapterPlan.page_plans.flatMap((p: any) => p.topics || []);
+        const rawTopics = cpData.chapterPlan.page_plans.flatMap((p: { topics?: string[] }) => p.topics || []);
         const conceptsByTopic: Record<string, string[]> = {};
-        cpData.chapterPlan.page_plans.forEach((p: any) => {
+        cpData.chapterPlan.page_plans.forEach((p: { topics?: string[]; key_concepts?: string[] }) => {
           (p.topics || []).forEach((t: string) => {
             if (!conceptsByTopic[t]) conceptsByTopic[t] = [];
             conceptsByTopic[t].push(...(p.key_concepts || []));
@@ -326,7 +326,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
           saveSession(updated);
         }
       }
-    } catch (e) {
+    } catch {
       console.error('Failed to refresh topics');
     } finally {
       setInitialLoading(false);
@@ -386,7 +386,12 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
             {topics.length === 0 ? (
               <div className="flex flex-col items-center py-8 px-4 text-center">
                 <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                  No topics found. Bypassed sessions or failed processing may cause this.
+                  No topics found.<br />
+                  <span className="block mt-2 text-[11px] text-slate-400">
+                    This usually means the chapter plan failed to process or the PDF is missing topic structure.<br />
+                    Try scanning again, or check if your PDF is clear and well-formatted.<br />
+                    If the problem persists, contact support or try a different file.
+                  </span>
                 </p>
                 <button
                   onClick={refreshTopics}
@@ -397,7 +402,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
                 </button>
               </div>
             ) : (
-              topics.map((topic, idx) => {
+              topics.map((topic) => {
                 const hasGenerated = existingSets.some(s => s.topic === topic && s.problems.length > 0);
                 const cachedCount = existingSets.find(s => s.topic === topic)?.problems?.length || 0;
                 const isSelected = selectedTopic === topic;
@@ -500,7 +505,6 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
               {/* Problems List */}
               <div className="space-y-4">
                 {filteredProblems.map((prob, idx) => {
-                  const isExpanded = expandedSolutions[prob.id || `${idx}`];
                   const difficultyColor = diffColors[prob.difficulty] || 'bg-slate-800 text-slate-300';
                   return (
                     <div key={prob.id || idx} className="rounded-2xl border overflow-hidden shadow-sm" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
