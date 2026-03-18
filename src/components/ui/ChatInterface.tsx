@@ -37,6 +37,11 @@ export function ChatInterface({
   const [topicsChecked, setTopicsChecked] = useState<Record<string, boolean>>({});
   const [isPageUnlocked, setIsPageUnlocked] = useState(sessionState.masteryStatus[currentPage] === 'mastered');
 
+  // Sync isPageUnlocked with session state when it changes (e.g. navigation back/forth)
+  useEffect(() => {
+    setIsPageUnlocked(sessionState.masteryStatus[currentPage] === 'mastered');
+  }, [sessionState.masteryStatus, currentPage]);
+
   const displayTimeline = useMemo(() => {
     const items: Array<{ type: 'separator' | 'message'; page: number; message?: Message }> = [];
 
@@ -175,9 +180,16 @@ export function ChatInterface({
     ];
     setMessages(newMessages);
 
-    // DEV HACK to manually unlock visually
+    // DEV HACK to manually unlock visually and persist it
     if (userMessage.toUpperCase() === 'UNLOCK') {
       setIsPageUnlocked(true);
+      onSessionUpdate(prev => ({
+        ...prev,
+        masteryStatus: {
+          ...prev.masteryStatus,
+          [currentPage]: 'mastered'
+        }
+      }));
       setIsLoading(false);
       return;
     }
@@ -220,6 +232,13 @@ export function ChatInterface({
         persistMessages(finalMsgs);
         
         setIsPageUnlocked(true);
+        onSessionUpdate(prev => ({
+          ...prev,
+          masteryStatus: {
+            ...prev.masteryStatus,
+            [currentPage]: 'mastered'
+          }
+        }));
       } else {
         const updatedMsgs: Message[] = [
           ...newMessages,
