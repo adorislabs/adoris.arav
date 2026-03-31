@@ -35,11 +35,25 @@ JSON structure you MUST output:
 }
 
 CRITICAL RULES:
-1. There MUST be exactly one entry in page_plans for EVERY page in the PDF, even if a page is mostly blank (set topics to ["Title Page"] or ["Exercises"] etc.).
+1. There MUST be exactly one entry in page_plans for EVERY page in the PDF, even if a page is mostly blank.
 2. Topics must be granular — do NOT lump multiple concepts into one topic. If a page covers "Newton's First Law" and "Inertia", list them separately.
 3. key_concepts should include exact formulas (written in plain text or LaTeX), definitions, and theorems.
 4. quiz_worthy_concepts should include the most important concepts that a student MUST master.
 5. estimated_difficulty should reflect how challenging the content is for a typical student.
+
+META-CONTENT FILTER — THIS IS CRITICAL:
+The following types of page content are ADMINISTRATIVE/BOILERPLATE — they are NOT educational subject matter and must NOT be extracted as topics or concepts:
+- Exam/test paper instructions: "Instructions to candidates", "Time allowed", "All questions are compulsory", "Write your name", "Do not turn over this paper", "End of Paper"
+- Marking schemes, rubrics, mark allocation tables, answer keys belonging to a test paper
+- Table of contents, index, chapter list
+- Cover pages, title pages, copyright pages, publisher credits
+- Bibliography, references, further reading lists
+- Blank pages, filler pages, "This page intentionally left blank"
+- Headers/footers: page numbers, school/institution name repeated on every page
+- Any page that is purely about HOW to take an exam, not WHAT to learn
+
+For such pages, set topics: [] and key_concepts: [] and quiz_worthy_concepts: [].
+ONLY extract topics from pages that contain actual SUBJECT-MATTER educational content: explanations, definitions, theorems, worked examples, practice problems about the subject, diagrams explaining concepts.
 
 DO NOT wrap the JSON in markdown blocks. Return ONLY raw JSON.
 `;

@@ -5,22 +5,33 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
 });
 
+/** Strip administrative/meta-content topics that leak in from cover/instruction pages */
+const META_TOPIC_PATTERNS = [
+  /\binstruction/i, /\bcandidate/i, /\bmarking scheme/i, /\banswer booklet/i,
+  /\bdo not turn/i, /\bblank page/i, /\btable of content/i, /\bcontent[s]?\s*page/i,
+  /\bindex\b/i, /\bbibliograph/i, /\bcopyright/i, /\badministrat/i, /\binvigilat/i,
+  /\btime allowed/i, /\btotal marks/i, /\bwrite your/i, /\bend of paper/i,
+  /\bthis paper/i, /\btest paper/i, /\bexam paper/i, /\bquestion paper/i,
+  /^\[administrative/i, /^title page$/i, /^cover page$/i, /^toc$/i,
+];
+function filterSubjectTopics(topics: string[]): string[] {
+  return topics.filter(t => t && t.trim().length > 2 && !META_TOPIC_PATTERNS.some(p => p.test(t)));
+}
+
 export async function POST(req: Request) {
   try {
     const { fileName, chapterPlan, lessonPlans, summaryData } = await req.json();
 
     // Build a rich context from the chapter plan and all lesson plans
-    const quizWorthyConcepts = chapterPlan?.page_plans
-      ?.flatMap((p: any) => p.quiz_worthy_concepts || [])
-      ?.filter(Boolean) || [];
-
-    const allTopics = chapterPlan?.page_plans
-      ?.flatMap((p: any) => p.topics || [])
-      ?.filter(Boolean) || [];
-
-    const allKeyConcepts = chapterPlan?.page_plans
-      ?.flatMap((p: any) => p.key_concepts || [])
-      ?.filter(Boolean) || [];
+    const quizWorthyConcepts = filterSubjectTopics(
+      chapterPlan?.page_plans?.flatMap((p: any) => p.quiz_worthy_concepts || [])?.filter(Boolean) || []
+    );
+    const allTopics = filterSubjectTopics(
+      chapterPlan?.page_plans?.flatMap((p: any) => p.topics || [])?.filter(Boolean) || []
+    );
+    const allKeyConcepts = filterSubjectTopics(
+      chapterPlan?.page_plans?.flatMap((p: any) => p.key_concepts || [])?.filter(Boolean) || []
+    );
 
     // Collect core explanations from all lesson plans for question variation
     const lessonSummaries = Object.entries(lessonPlans || {})
@@ -32,6 +43,8 @@ You are creating the FINAL CHAPTER EXAM for a student who just finished studying
 Title: ${chapterPlan?.chapter_title || fileName}
 
 This exam must be COMPREHENSIVE, covering the ENTIRE chapter. It should feel like a real exam — not a casual quiz.
+
+IMPORTANT: All topics and concepts listed below are SUBJECT-MATTER content from this chapter. Generate questions that test a student's academic understanding of the subject. Do NOT generate questions about exam instructions, paper format, marking, or how to take a test.
 
 The chapter covers these topics: ${JSON.stringify(allTopics)}
 Quiz-worthy concepts that MUST be tested: ${JSON.stringify(quizWorthyConcepts)}
@@ -87,7 +100,15 @@ For fill_blank questions, options should be an empty array [].
 
     return NextResponse.json({
       success: true,
-      quiz: JSON.parse(response.text || '{}')
+      quiz: (() => {
+        try {
+          return JSON.parse(response.text || '{}');
+        } catch {
+          const match = (response.text || '').match(/\{[\s\S]*\}/);
+          if (match) return JSON.parse(match[0]);
+          throw new Error('Quiz generator returned unparseable JSON');
+        }
+      })(),
     });
     
   } catch (error) {

@@ -6,6 +6,46 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
 });
 
+/**
+ * Patterns that identify administrative / meta-content topics that should
+ * never appear as exam questions. These come from cover pages, exam
+ * instruction pages, TOC, bibliography, marking schemes, etc.
+ */
+const META_TOPIC_PATTERNS = [
+  /\binstruction/i,
+  /\bcandidate/i,
+  /\bexamination rule/i,
+  /\bmarking scheme/i,
+  /\banswer booklet/i,
+  /\bdo not turn/i,
+  /\bblank page/i,
+  /\btable of content/i,
+  /\bcontent[s]?\s*page/i,
+  /\bindex\b/i,
+  /\bbibliograph/i,
+  /\breferences?\s*page/i,
+  /\bcopyright/i,
+  /\badministrat/i,
+  /\binvigilat/i,
+  /\btime allowed/i,
+  /\btotal marks/i,
+  /\bwrite your/i,
+  /\bend of paper/i,
+  /\bthis paper/i,
+  /\btest paper/i,
+  /\bexam paper/i,
+  /\bquestion paper/i,
+  /\bpage number/i,
+  /^\[administrative/i,
+  /^title page$/i,
+  /^cover page$/i,
+  /^toc$/i,
+];
+
+function filterSubjectTopics(topics: string[]): string[] {
+  return topics.filter(t => t && t.trim().length > 2 && !META_TOPIC_PATTERNS.some(p => p.test(t)));
+}
+
 export interface ExamQuestion {
   question_number: number;
   marks: 1 | 2 | 3 | 5;
@@ -40,15 +80,15 @@ export async function generateExam(
   lessonPlans: Record<number, LessonPlan>,
   fileName: string
 ): Promise<Exam> {
-  let allTopics = chapterPlan?.page_plans?.flatMap(p => p.topics) || [];
-  let allConcepts = chapterPlan?.page_plans?.flatMap(p => p.key_concepts) || [];
-  let quizWorthy = chapterPlan?.page_plans?.flatMap(p => p.quiz_worthy_concepts) || [];
+  let allTopics = filterSubjectTopics(chapterPlan?.page_plans?.flatMap(p => p.topics) || []);
+  let allConcepts = filterSubjectTopics(chapterPlan?.page_plans?.flatMap(p => p.key_concepts) || []);
+  let quizWorthy = filterSubjectTopics(chapterPlan?.page_plans?.flatMap(p => p.quiz_worthy_concepts) || []);
 
   // Dev bypass: If no chapter plan, extract from lesson plans
   if (allTopics.length === 0 && Object.keys(lessonPlans).length > 0) {
-    allTopics = [...new Set(
+    allTopics = filterSubjectTopics([...new Set(
       Object.values(lessonPlans).flatMap(lp => lp.suggestive_doubts || [])
-    )].slice(0, 20);
+    )].slice(0, 20));
     allConcepts = [...new Set(
       Object.values(lessonPlans).flatMap(lp => lp.core_explanation?.split(/[.!?]/).slice(0, 3) || [])
     )].slice(0, 15);
@@ -64,6 +104,8 @@ You are creating a FORMAL CHAPTER EXAMINATION for the document: "${fileName}"
 Chapter: ${chapterPlan?.chapter_title || fileName}
 
 This is a proper exam paper. All questions must be MEDIUM to VERY HARD — no trivial recall.
+
+IMPORTANT: The topics and concepts below are ALL from the SUBJECT-MATTER content of this chapter (academic/educational content). Generate questions that test a student's understanding of the actual subject. Do NOT generate questions about exam administration, paper format, marking schemes, or how to take a test.
 
 TOPICS TO COVER: ${JSON.stringify(allTopics)}
 KEY CONCEPTS & FORMULAS: ${JSON.stringify(allConcepts)}
@@ -140,5 +182,12 @@ JSON Output:
     },
   });
 
-  return JSON.parse(response.text || '{}') as Exam;
+  try {
+    return JSON.parse(response.text || '{}') as Exam;
+  } catch {
+    // Fallback: extract first JSON object from response
+    const match = (response.text || '').match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]) as Exam;
+    throw new Error('Exam generator returned unparseable JSON');
+  }
 }

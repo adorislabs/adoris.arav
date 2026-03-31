@@ -272,8 +272,19 @@ export async function generatePracticeTopics(
   pagePlans: PagePlanEntry[],
   chapterTitle: string
 ): Promise<PracticeTopic[]> {
-  const rawTopics = pagePlans.flatMap(p => p.topics);
-  const rawConcepts = pagePlans.flatMap(p => p.key_concepts);
+  // Strip meta/administrative topics before they reach the LLM
+  const META_PATTERNS = [
+    /\binstruction/i, /\bcandidate/i, /\bmarking scheme/i, /\banswer booklet/i,
+    /\bdo not turn/i, /\bblank page/i, /\btable of content/i, /\bcontent[s]?\s*page/i,
+    /\bindex\b/i, /\bbibliograph/i, /\bcopyright/i, /\badministrat/i, /\binvigilat/i,
+    /\btime allowed/i, /\btotal marks/i, /\bwrite your/i, /\bend of paper/i,
+    /\bthis paper/i, /\btest paper/i, /\bexam paper/i, /\bquestion paper/i,
+    /^\[administrative/i, /^title page$/i, /^cover page$/i, /^toc$/i,
+  ];
+  const isMetaTopic = (t: string) => !t || META_PATTERNS.some(p => p.test(t));
+
+  const rawTopics = pagePlans.flatMap(p => p.topics).filter(t => !isMetaTopic(t));
+  const rawConcepts = pagePlans.flatMap(p => p.key_concepts).filter(t => !isMetaTopic(t));
 
   const prompt = `
 You are a curriculum designer. Given the raw page-by-page topics from a textbook chapter, produce a CURATED list of 5-10 practice topics that a student can navigate to practise.
@@ -281,6 +292,8 @@ You are a curriculum designer. Given the raw page-by-page topics from a textbook
 CHAPTER: "${chapterTitle}"
 RAW TOPICS (from chapter plan): ${JSON.stringify([...new Set(rawTopics)])}
 KEY CONCEPTS: ${JSON.stringify([...new Set(rawConcepts)].slice(0, 30))}
+
+IMPORTANT: These topics are ALL from the subject-matter content of this chapter. If any topic looks administrative (exam instructions, marking scheme, table of contents, etc.), ignore it entirely and do not create a practice topic for it.
 
 RULES:
 1. Merge similar/overlapping raw topics into ONE labelled practice topic (e.g. "Comparing Fractions (Same Numerator)" + "Comparing Fractions to 1/2" → "Comparing Fractions")
