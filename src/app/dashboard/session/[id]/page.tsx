@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect, useCallback } from 'react';
+import { use, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { SplitPane } from '@/components/ui/SplitPane';
@@ -26,6 +26,8 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const [phase, setPhase] = useState<SessionPhase>('checking');
   const [session, setSession] = useState<SessionState | null>(null);
   const [totalPages, setTotalPages] = useState<number | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   // ─── Phase 1: Fetch filename and check for existing session ───────────
   useEffect(() => {
@@ -55,35 +57,26 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     if (!fileName) return;
 
     async function initSession() {
-      // 1. Always fetch total pages
+      // Fetch page count and cloud session in parallel
+      const [pagesResult, cloudResult] = await Promise.allSettled([
+        fetch(`/api/pdfs/pages?chapterId=${id}`).then(r => r.json()),
+        fetch(`/api/pdfs/session?chapterId=${id}`).then(r => r.json()),
+      ]);
+
       let pages = totalPages;
-      try {
-        const res = await fetch(`/api/pdfs/pages?chapterId=${id}`);
-        const data = await res.json();
-        if (data.success) {
-          pages = data.totalPages;
-          setTotalPages(pages);
-        }
-      } catch {
-        console.error('Failed to load page count');
+      if (pagesResult.status === 'fulfilled' && pagesResult.value.success) {
+        pages = pagesResult.value.totalPages;
+        setTotalPages(pages);
       }
 
-      // 2. Try fetching session from Database (Cloud First)
       let cloudSession: SessionState | null = null;
-      try {
-        const res = await fetch(`/api/pdfs/session?chapterId=${id}`);
-        const data = await res.json();
-        if (data.success && data.session) {
-          // Merge basic info we have into the cloud session data
-          cloudSession = {
-            ...data.session,
-            fileName: fileName!,
-            totalPages: pages || 1,
-            chapterPlan: null, // We'll try to load/generate this next
-          };
-        }
-      } catch (err) {
-        console.warn('[Session] Failed to fetch cloud session:', err);
+      if (cloudResult.status === 'fulfilled' && cloudResult.value.success && cloudResult.value.session) {
+        cloudSession = {
+          ...cloudResult.value.session,
+          fileName: fileName!,
+          totalPages: pages || 1,
+          chapterPlan: null,
+        };
       }
 
       // 3. Fallback/Check localStorage
@@ -206,19 +199,32 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   useEffect(() => {
     if (!session || phase !== 'active') return;
 
+    // Cancel any in-flight sync
+    syncAbortRef.current?.abort();
+
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
+
+    setSyncStatus('idle');
     const timer = setTimeout(async () => {
+      setSyncStatus('syncing');
       try {
         await fetch('/api/pdfs/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session }),
+          signal: controller.signal,
         });
+        setSyncStatus('synced');
       } catch (err) {
-        console.warn('[Sync] Failed to push session to Supabase:', err);
+        if ((err as Error).name !== 'AbortError') {
+          console.warn('[Sync] Failed to push session to Supabase:', err);
+          setSyncStatus('error');
+        }
       }
-    }, 2000); // Debounce sync by 2 seconds
+    }, 2000);
 
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); controller.abort(); };
   }, [session, phase]);
 
   // ─── Persist session updates from ChatInterface ───────────────────────
@@ -384,6 +390,12 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
            )}
          </div>
          <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+           {/* Sync status indicator */}
+           <span className="flex items-center gap-1 mr-2" title={syncStatus === 'synced' ? 'Saved to cloud' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'error' ? 'Sync failed' : ''}>
+             {syncStatus === 'syncing' && <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--accent)' }} />}
+             {syncStatus === 'synced' && <div className="w-2 h-2 rounded-full" style={{ background: 'var(--success)' }} />}
+             {syncStatus === 'error' && <div className="w-2 h-2 rounded-full" style={{ background: 'var(--error)' }} />}
+           </span>
            <span>Page {currentPage + 1} of {session.totalPages || '?'}</span>
            <div className="w-32 h-2 rounded-full overflow-hidden ml-2" style={{ background: 'var(--bg-muted)' }}>
              <div 

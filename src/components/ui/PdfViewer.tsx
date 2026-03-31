@@ -1,11 +1,20 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+
 interface PdfViewerProps {
   chapterId: string | null;
   currentPage: number;
 }
 
 export function PdfViewer({ chapterId, currentPage }: PdfViewerProps) {
+  const [loading, setLoading] = useState(true);
+
+  // Reset loading overlay whenever the page or chapter changes
+  useEffect(() => {
+    setLoading(true);
+  }, [chapterId, currentPage]);
+
   if (!chapterId) {
     return (
       <div className="h-full w-full flex flex-col p-4" style={{ background: 'var(--bg-base)' }}>
@@ -33,11 +42,20 @@ export function PdfViewer({ chapterId, currentPage }: PdfViewerProps) {
       <div className="absolute top-6 left-6 z-10 px-3 py-1 rounded-full shadow-sm text-xs font-semibold border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
         Active Page: {currentPage + 1}
       </div>
-      <div className="flex-1 rounded-xl border overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+
+      <div className="flex-1 rounded-xl border overflow-hidden relative" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        {/* Loading overlay */}
+        {loading && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3" style={{ background: 'var(--bg-surface)' }}>
+            <div className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading PDF…</span>
+          </div>
+        )}
         <object
           data={pdfUrl}
           type="application/pdf"
           className="w-full h-full"
+          onLoad={() => setLoading(false)}
         >
           <p className="p-4 text-center" style={{ color: 'var(--text-secondary)' }}>
             Your browser does not support PDFs. <a href={pdfUrl} style={{ color: 'var(--accent)' }}>Download the PDF</a>.

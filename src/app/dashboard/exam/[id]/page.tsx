@@ -155,14 +155,15 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
-  // ─── Score Calculation ────────────────────────────────────────────────
-  const calculateScore = (): { earned: number; total: number; perSection: { name: string; earned: number; total: number }[] } => {
+  // ─── Score Calculation (memoized) ──────────────────────────────────
+  const scoreResult = useMemo(() => {
+    if (!submitted || !exam) return null;
     let earned = 0;
-    const total = exam?.total_marks || 50;
+    const total = exam.total_marks || 50;
     const perSection: { name: string; earned: number; total: number }[] = [];
 
     let qIdx = 0;
-    exam?.sections.forEach((sec) => {
+    exam.sections.forEach((sec) => {
       let secEarned = 0;
       const secTotal = sec.marks_per_question * sec.questions.length;
       sec.questions.forEach((q) => {
@@ -174,7 +175,6 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
               earned += q.marks;
             }
           }
-          // Text-based answers can't be auto-graded — count as attempted
         }
         qIdx++;
       });
@@ -182,7 +182,31 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     });
 
     return { earned, total, perSection };
-  };
+  }, [submitted, exam, answers]);
+
+  const calculateScore = () => scoreResult ?? { earned: 0, total: exam?.total_marks || 50, perSection: [] };
+
+  // ─── Keyboard navigation ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!exam || submitted) return;
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); goNext(); }
+      if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); goPrev(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exam, submitted, activeSection, activeQ]);
+
+  // ─── Warn before navigating away mid-exam ────────────────────────────
+  useEffect(() => {
+    if (submitted || !exam) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [exam, submitted]);
 
   // ─── Loading ──────────────────────────────────────────────────────────
   if (loading) {

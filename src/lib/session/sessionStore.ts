@@ -61,11 +61,28 @@ export interface SessionState {
   lastUpdated: string;
 }
 
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+/** Max messages to keep per page in localStorage (prevents quota overflow) */
+const MAX_MESSAGES_PER_PAGE = 50;
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function getSessionKey(id: string): string {
   // Use a stable key based on chapter ID
   return `adoris_session_${btoa(id)}`;
+}
+
+/** Trim chat histories to prevent localStorage from exceeding quota */
+function trimSession(state: SessionState): SessionState {
+  const trimmed = { ...state, chatHistories: { ...state.chatHistories } };
+  for (const page of Object.keys(trimmed.chatHistories)) {
+    const msgs = trimmed.chatHistories[Number(page)];
+    if (msgs && msgs.length > MAX_MESSAGES_PER_PAGE) {
+      trimmed.chatHistories[Number(page)] = msgs.slice(-MAX_MESSAGES_PER_PAGE);
+    }
+  }
+  return trimmed;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -90,12 +107,27 @@ export function loadSession(id: string): SessionState | null {
 export function saveSession(state: SessionState): void {
   if (typeof window === 'undefined') return;
   try {
-    const toSave: SessionState = {
+    const toSave = trimSession({
       ...state,
       lastUpdated: new Date().toISOString(),
-    };
+    });
     localStorage.setItem(getSessionKey(state.id), JSON.stringify(toSave));
   } catch (e) {
+    // If quota exceeded, try clearing old sessions and retry once
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      try {
+        // Remove the oldest adoris session to make room
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith('adoris_session_') && key !== getSessionKey(state.id)) {
+            localStorage.removeItem(key);
+            break;
+          }
+        }
+        localStorage.setItem(getSessionKey(state.id), JSON.stringify(trimSession({ ...state, lastUpdated: new Date().toISOString() })));
+        return;
+      } catch { /* fall through */ }
+    }
     console.warn('[SessionStore] Failed to save session:', e);
   }
 }

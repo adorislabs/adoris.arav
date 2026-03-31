@@ -116,3 +116,85 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+
+/* ── Adoris Prose (chat messages) ───────────────────────── */
+.adoris-prose {
+  color: #D1D5DB;
+  max-width: none;
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+.adoris-prose h1, .adoris-prose h2, .adoris-prose h3,
+.adoris-prose h4, .adoris-prose h5, .adoris-prose h6 {
+  color: #FFFFFF;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  letter-spacing: -0.01em;
+}
+.adoris-prose h1 { font-size: 1.5rem; }
+.adoris-prose h2 { font-size: 1.25rem; }
+.adoris-prose h3 { font-size: 1.125rem; }
+.adoris-prose p { margin-top: 0.75em; margin-bottom: 0.75em; }
+.adoris-prose ul, .adoris-prose ol { padding-left: 1.5em; margin-bottom: 1em; }
+.adoris-prose li { margin-bottom: 0.3em; }
+.adoris-prose li::marker { color: #6B7280; }
+.adoris-prose strong { color: #F3F4F6; font-weight: 600; }
+.adoris-prose code {
+  background: rgba(31, 41, 55, 0.6);
+  color: #A78BFA;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.adoris-prose pre {
+  background: #111827;
+  color: #E5E7EB;
+  padding: 1.25em;
+  border-radius: 8px;
+  overflow-x: auto;
+  border: 1px solid rgba(255,255,255,0.05);
+  margin: 1.5em 0;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+}
+.adoris-prose pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border: none;
+  font-size: 0.9em;
+}
+.adoris-prose blockquote {
+  border-left: 3px solid #6366F1;
+  padding-left: 1.25rem;
+  color: #9CA3AF;
+  font-style: italic;
+  margin: 1.5em 0;
+  background: linear-gradient(to right, rgba(99, 102, 241, 0.08), transparent);
+  padding-top: 0.75em;
+  padding-bottom: 0.75em;
+  border-radius: 0 8px 8px 0;
+}
+.adoris-prose table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5em 0;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.adoris-prose th, .adoris-prose td {
+  padding: 0.75em 1.25em;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  text-align: left;
+  font-size: 0.9em;
+}
+.adoris-prose th {
+  background: rgba(255,255,255,0.03);
+  font-weight: 600;
+  color: #F9FAFB;
+}
+.adoris-prose tr:last-child td { border-bottom: none; }

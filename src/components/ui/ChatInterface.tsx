@@ -1,11 +1,17 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import type { Message, LessonPlan, PagePlanEntry, SessionState, ObserverState } from '@/lib/session/sessionStore';
+
+// ─── Memoized markdown renderer ─────────────────────────────────────────
+const MemoMarkdown = memo(function MemoMarkdown({ content }: { content: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{content}</ReactMarkdown>;
+});
+MemoMarkdown.displayName = 'MemoMarkdown';
 
 interface ChatInterfaceProps {
   sessionId: string;
@@ -69,14 +75,34 @@ export function ChatInterface({
   }, [currentPage, sessionState.chatHistories]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const scrollToBottom = useCallback((instant = false) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'instant' : 'smooth' });
+  }, []);
 
+  // Auto-scroll on new messages, but only if user is near the bottom
   useEffect(() => {
-    scrollToBottom();
-  }, [displayTimeline]);
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (isNearBottom) scrollToBottom();
+  }, [displayTimeline, scrollToBottom]);
+
+  // Show/hide scroll-to-bottom button
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollBtn(gap > 200);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   // ─── Persist messages to session whenever they change ─────────────────
   const persistMessages = useCallback((msgs: Message[]) => {
@@ -109,6 +135,8 @@ export function ChatInterface({
       return;
     }
 
+    const controller = new AbortController();
+
     const fetchLessonPlan = async () => {
       setIsLoading(true);
       setMessages([
@@ -129,6 +157,7 @@ export function ChatInterface({
             pageIndex: currentPage,
             pagePlanEntry: pagePlanEntry || undefined,
           }),
+          signal: controller.signal,
         });
         
         const data = await res.json();
@@ -152,6 +181,7 @@ export function ChatInterface({
           throw new Error('Could not generate lesson plan');
         }
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
         console.error(err);
         setMessages([
           {
@@ -166,13 +196,21 @@ export function ChatInterface({
     };
 
     fetchLessonPlan();
+    return () => controller.abort();
   }, [fileName, currentPage, initialLessonPlan, initialMessages.length, pagePlanEntry, persistLessonPlan, persistMessages, sessionId]);
 
   const handleSendQuery = async (userMessage: string) => {
     if (!userMessage.trim() || isLoading) return;
 
     setInput('');
+    // Reset textarea height
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setIsLoading(true);
+
+    // Abort any previous in-flight request
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const newMessages: Message[] = [
       ...messages,
@@ -205,6 +243,7 @@ export function ChatInterface({
           sessionId,
           observerContext: sessionState.observerStates?.[currentPage] || null,
         }),
+        signal: controller.signal,
       });
 
       const data = await response.json();
@@ -249,6 +288,7 @@ export function ChatInterface({
         persistMessages(updatedMsgs);
       }
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return;
       console.error('Chat error:', error);
       const errorMsgs: Message[] = [
         ...newMessages,
@@ -262,8 +302,15 @@ export function ChatInterface({
       persistMessages(errorMsgs);
     } finally {
       setIsLoading(false);
+      abortRef.current = null;
     }
   };
+
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsLoading(false);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,11 +330,11 @@ export function ChatInterface({
     }
   }, [pagePlanEntry]);
 
-  // Manim Visual Hook Renderer
-  const renderMessageContent = (content: string) => {
+  // Manim Visual Hook Renderer (memoized via useCallback + MemoMarkdown)
+  const renderMessageContent = useCallback((content: string) => {
     const parts = content.split(/\[MANIM:(.*?)\]/g);
     if (parts.length === 1) {
-      return <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{content}</ReactMarkdown>;
+      return <MemoMarkdown content={content} />;
     }
     return parts.map((part, i) => {
       // Odd indices are the captured Manim prompts
@@ -305,14 +352,14 @@ export function ChatInterface({
               <div style={{ color: 'var(--text-muted)' }} className="mb-2">
                 <svg className="w-8 h-8 mx-auto opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
               </div>
-              <p className="text-sm font-medium text-slate-400 italic">"{part.trim()}"</p>
+              <p className="text-sm font-medium text-slate-400 italic">&quot;{part.trim()}&quot;</p>
             </div>
           </div>
         );
       }
-      return <ReactMarkdown key={i} remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{part}</ReactMarkdown>;
+      return <MemoMarkdown key={i} content={part} />;
     });
-  };
+  }, []);
 
   return (
     <div className="flex flex-col h-full relative">
@@ -370,8 +417,12 @@ export function ChatInterface({
       )}
 
       <div
+            ref={scrollContainerRef}
             className="flex-1 overflow-y-auto p-4 pb-48 space-y-4"
-            style={{ background: 'var(--bg-base)' }}>
+            style={{ background: 'var(--bg-base)' }}
+            aria-live="polite"
+            aria-label="Chat messages"
+          >
         {displayTimeline.map((item, idx) => {
           if (item.type === 'separator') {
             return (
@@ -401,103 +452,7 @@ export function ChatInterface({
                     {renderMessageContent(m.content)}
                   </div>
                 ) : (
-                  <div className="prose max-w-none w-full tracking-normal">
-                    <style>{`
-                      .prose {
-                        color: #D1D5DB; /* light slate */
-                        max-width: none;
-                        font-size: 0.95rem;
-                        line-height: 1.75;
-                      }
-                      .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-                        color: #FFFFFF;
-                        font-weight: 600;
-                        margin-top: 1.5em;
-                        margin-bottom: 0.75em;
-                        letter-spacing: -0.01em;
-                      }
-                      .prose h1 { font-size: 1.5rem; }
-                      .prose h2 { font-size: 1.25rem; }
-                      .prose h3 { font-size: 1.125rem; }
-                      .prose p {
-                        margin-top: 0.75em;
-                        margin-bottom: 0.75em;
-                      }
-                      .prose ul, .prose ol {
-                        padding-left: 1.5em;
-                        margin-bottom: 1em;
-                      }
-                      .prose li {
-                        margin-bottom: 0.3em;
-                      }
-                      .prose li::marker {
-                        color: #6B7280;
-                      }
-                      .prose strong {
-                        color: #F3F4F6;
-                        font-weight: 600;
-                      }
-                      .prose code {
-                        background: rgba(31, 41, 55, 0.6);
-                        color: #A78BFA; /* Turbo purple tint */
-                        padding: 0.2em 0.4em;
-                        border-radius: 4px;
-                        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-                        font-size: 0.85em;
-                        border: 1px solid rgba(255,255,255,0.05);
-                      }
-                      .prose pre {
-                        background: #111827; /* Darker bg for code blocks */
-                        color: #E5E7EB;
-                        padding: 1.25em;
-                        border-radius: 8px;
-                        overflow-x: auto;
-                        border: 1px solid rgba(255,255,255,0.05);
-                        margin: 1.5em 0;
-                        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
-                      }
-                      .prose pre code {
-                        background: transparent;
-                        color: inherit;
-                        padding: 0;
-                        border: none;
-                        font-size: 0.9em;
-                      }
-                      .prose blockquote {
-                        border-left: 3px solid #6366F1;
-                        padding-left: 1.25rem;
-                        color: #9CA3AF;
-                        font-style: italic;
-                        margin: 1.5em 0;
-                        background: linear-gradient(to right, rgba(99, 102, 241, 0.08), transparent);
-                        padding-top: 0.75em;
-                        padding-bottom: 0.75em;
-                        border-radius: 0 8px 8px 0;
-                      }
-                      .prose table {
-                        width: 100%;
-                        border-collapse: separate;
-                        border-spacing: 0;
-                        margin: 1.5em 0;
-                        border: 1px solid rgba(255,255,255,0.1);
-                        border-radius: 8px;
-                        overflow: hidden;
-                      }
-                      .prose th, .prose td {
-                        padding: 0.75em 1.25em;
-                        border-bottom: 1px solid rgba(255,255,255,0.05);
-                        text-align: left;
-                        font-size: 0.9em;
-                      }
-                      .prose th {
-                        background: rgba(255,255,255,0.03);
-                        font-weight: 600;
-                        color: #F9FAFB;
-                      }
-                      .prose tr:last-child td {
-                        border-bottom: none;
-                      }
-                    `}</style>
+                  <div className="adoris-prose">
                     {renderMessageContent(m.content)}
                   </div>
                 )}
@@ -550,26 +505,66 @@ export function ChatInterface({
           </button>
         )}
 
-        <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto w-full">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={isLoading}
-            placeholder={!lessonPlan ? 'Building lesson plan...' : 'Discuss or answer directly...'}
-              className="w-full text-left p-3 rounded-xl border text-sm transition-all"
-              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
-          />
+        {/* Scroll-to-bottom button */}
+        {showScrollBtn && (
           <button
-            type="submit"
-            disabled={!input.trim() || isLoading || !lessonPlan}
-            className="px-6 py-3 rounded-full font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all transform active:scale-95 flex items-center justify-center min-w-[100px]"
-            style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+            onClick={() => scrollToBottom()}
+            className="absolute right-8 bottom-36 z-20 w-9 h-9 rounded-full shadow-lg flex items-center justify-center border transition-all hover:opacity-90"
+            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+            aria-label="Scroll to latest message"
           >
-            {isLoading ? 'Thinking' : 'Send'}
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
           </button>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="flex gap-2 max-w-4xl mx-auto w-full items-end"
+        >
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // Auto-grow: reset then expand
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
+            }}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleSendQuery(input);
+              }
+            }}
+            disabled={isLoading && !abortRef.current}
+            placeholder={!lessonPlan ? 'Building lesson plan...' : 'Discuss or answer… (⌘↵ to send)'}
+            rows={1}
+            className="w-full p-3 rounded-xl border text-sm transition-all resize-none overflow-hidden leading-relaxed"
+            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
+          />
+          {isLoading ? (
+            <button
+              type="button"
+              onClick={handleStop}
+              className="px-5 py-3 rounded-full font-medium shadow-md transition-all flex items-center justify-center gap-2 shrink-0"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-secondary)', border: '1px solid' }}
+            >
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>
+              Stop
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!input.trim() || !lessonPlan}
+              className="px-6 py-3 rounded-full font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all transform active:scale-95 flex items-center justify-center min-w-[80px] shrink-0"
+              style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+            >
+              Send
+            </button>
+          )}
         </form>
-        
+
+        <p className="text-[10px] mt-1.5 text-center" style={{ color: 'var(--text-muted)' }}>⌘↵ to send &middot; shift+↵ for newline</p>
         {/* DEV Bypass hidden: type UNLOCK manually to trigger it instead of showing the hint */}
       </div>
     </div>
