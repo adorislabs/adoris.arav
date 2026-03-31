@@ -203,6 +203,7 @@ export function ChatInterface({
           historyContext: buildCrossPageHistory(newMessages),
           pageContext: JSON.stringify(lessonPlan || {}),
           sessionId,
+          observerContext: sessionState.observerStates?.[currentPage] || null,
         }),
       });
 

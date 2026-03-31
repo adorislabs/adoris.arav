@@ -16,6 +16,8 @@ export interface Message {
 export interface LessonPlan {
   core_explanation: string;
   latex_questions: string[];
+  application_problem?: string;
+  prerequisite_concepts?: string[];
   manim_visual_ideas: string;
   suggestive_doubts: string[];
 }
@@ -40,6 +42,9 @@ export interface ObserverState {
   confusionPoints: string[];
   gaps: string[];
   analogies: string[];
+  mastery_status?: string;
+  emotional_state?: string;
+  learning_velocity?: string;
 }
 
 export interface SessionState {

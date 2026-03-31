@@ -34,17 +34,28 @@ ${coverageInstruction}
 
 The JSON must follow exactly this structure:
 {
-  "core_explanation": "A very conversational, Hinglish explanation of the main concept on this page. Pretend you are explaining it directly to your smart friend. CRITICAL RULE: YOU MUST USE FREQUENT LINE BREAKS, MARKDOWN HEADINGS (###), AND BULLET POINTS. Do not send giant walls of text. Break it down into digestible, bite-sized sections (e.g., ### Concept, ### Example). DO NOT say 'Hello students', do not address a class, and do not use their name excessively. Make it thorough — cover EVERY topic visible on this page.",
+  "core_explanation": "A very conversational, Hinglish explanation of the main concept on this page. Pretend you are explaining it directly to your smart friend. CRITICAL RULES: (1) USE FREQUENT LINE BREAKS, MARKDOWN HEADINGS (###), AND BULLET POINTS. Never send walls of text. (2) Break it into digestible, bite-sized sections (e.g., ### Concept, ### Why It Matters, ### Example Walkthrough). (3) Start with a 1-2 sentence orientation: what this page is about and why it matters. (4) Cover EVERY topic visible on this page thoroughly. (5) DO NOT address a class or use the student's name.",
   "latex_questions": [
-    "A deep reasoning question about the topic. If it involves math, physics, or formulas, MUST use strictly formatted LaTeX inside $...$ or $$...$$ markers."
+    "Question 1 (REMEMBER/UNDERSTAND level): A definition or identification question",
+    "Question 2 (APPLY level): Use a formula/concept in a concrete scenario with numbers",
+    "Question 3 (ANALYZE level): A deep 'Why does X happen?' or 'What if we changed Y?' question"
   ],
-  "manim_visual_ideas": "A short text describing a mental visual analogy or a precursor script idea for a Manim animation based on any diagrams or core formulas on the page.",
+  "application_problem": "A novel mini-problem that applies the core concept in a new context (different from the textbook examples). This is the final test before mastery. Use LaTeX for any math.",
+  "prerequisite_concepts": ["List of concepts from PREVIOUS pages the student should already know to understand this page"],
+  "manim_visual_ideas": "A short text describing a mental visual analogy or a Manim animation idea based on diagrams or core formulas on the page.",
   "suggestive_doubts": [
     "A button label for a common student doubt (e.g. 'Formula derivation mein problem hai')",
     "Another doubt button (e.g. 'Can you give a real life example?')",
-    "A third doubt to help the student identify friction points"
+    "A third doubt targeting a common misconception about this topic",
+    "A fourth doubt for connecting this to a practical scenario"
   ]
 }
+
+CRITICAL RULES FOR QUESTION DESIGN:
+- latex_questions MUST scaffold from easy → hard (Bloom's taxonomy: Remember → Understand → Apply → Analyze).
+- Each question should test a DIFFERENT angle of the concept, not repeat the same idea.
+- The application_problem should be something NOT on this textbook page — a fresh scenario that uses the same concept.
+- suggestive_doubts should target the specific confusing parts of THIS page's content, not generic doubts.
 
 DO NOT wrap the JSON in markdown blocks like \`\`\`json. Return ONLY raw JSON text.
 Ensure LaTeX escapes are properly handled in the string (e.g., \\\\frac).

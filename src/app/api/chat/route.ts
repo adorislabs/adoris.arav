@@ -8,14 +8,14 @@ const messageCounters = new Map<string, number>();
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { message, historyContext, pageContext, sessionId } = body;
+    const { message, historyContext, pageContext, sessionId, observerContext } = body;
 
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Call 1: The Gatekeeper Tutor
-    const tutorResponse = await askTutor(message, pageContext || '', historyContext);
+    // Call 1: The Gatekeeper Tutor — now receives observer insights for adaptive teaching
+    const tutorResponse = await askTutor(message, pageContext || '', historyContext, observerContext || null);
 
     // Call 2: The Hidden Observer — only every Nth message (cost optimization)
     const counterKey = sessionId || 'default';
