@@ -30,10 +30,26 @@ export interface PagePlanEntry {
   quiz_worthy_concepts: string[];
 }
 
+/** A curated practice topic — generated once by LLM from the chapter plan */
+export interface PracticeTopic {
+  /** Short, clean label — e.g. "Comparing Fractions" */
+  label: string;
+  /** One-sentence description of what practicing this covers */
+  description: string;
+  /** Key concepts / formulas to test */
+  key_concepts: string[];
+  /** Rough difficulty of this concept cluster */
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  /** Which raw page topics map to this practice topic */
+  source_topics: string[];
+}
+
 export interface ChapterPlan {
   chapter_title: string;
   total_pages: number;
   page_plans: PagePlanEntry[];
+  /** Curated practice topics — generated once, derived from page_plans */
+  practice_topics?: PracticeTopic[];
 }
 
 export type PageMasteryStatus = 'locked' | 'in_progress' | 'mastered';

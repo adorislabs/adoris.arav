@@ -45,7 +45,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     if (!fileName) return;
     setLoading(true);
     try {
-      const session = loadSession(fileName!);
+      const session = loadSession(id);
       const res = await fetch('/api/pdfs/exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

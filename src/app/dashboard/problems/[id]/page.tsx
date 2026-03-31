@@ -1,12 +1,15 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import Link from 'next/link';
 import { loadSession, saveSession } from '@/lib/session/sessionStore';
+import type { PracticeTopic } from '@/lib/session/sessionStore';
+
+// ─── Types ────────────────────────────────────────────────────────────────
 
 interface Problem {
   id: string;
@@ -25,147 +28,148 @@ interface ProblemSetData {
   problems: Problem[];
 }
 
-interface TopicIndexEntry {
-  keyConcepts: string[];
-  sourceTopics: string[];
-}
-
 type DifficultyFilter = 'all' | 'foundation' | 'easy' | 'medium' | 'hard' | 'exam_level';
 
-const LOW_VALUE_TOPIC_PATTERNS = [
-  /person\s*\d+/i,
-  /opens?\s+every\s+locker/i,
-  /locker\s*puzzle\s*mechanics?/i,
-  /step\s*\d+/i,
-  /iteration\s*\d*/i,
-];
+// ─── Memoized markdown ───────────────────────────────────────────────────
+const MemoMd = memo(function MemoMd({ content }: { content: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+      {content}
+    </ReactMarkdown>
+  );
+});
+MemoMd.displayName = 'MemoMd';
 
-function sanitizeTopics(rawTopics: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
+// ─── Difficulty meta ─────────────────────────────────────────────────────
+const DIFF_META: Record<string, { label: string; badge: string }> = {
+  foundation: { label: 'Foundation',  badge: 'bg-blue-900/50 text-blue-400 border-blue-800/40' },
+  easy:       { label: 'Easy',        badge: 'bg-emerald-900/50 text-emerald-400 border-emerald-800/40' },
+  medium:     { label: 'Medium',      badge: 'bg-amber-900/50 text-amber-400 border-amber-800/40' },
+  hard:       { label: 'Hard',        badge: 'bg-orange-900/50 text-orange-400 border-orange-800/40' },
+  exam_level: { label: 'Exam Level',  badge: 'bg-red-900/50 text-red-400 border-red-800/40' },
+  very_hard:  { label: 'Very Hard',   badge: 'bg-red-900/50 text-red-400 border-red-800/40' },
+};
 
-  for (const raw of rawTopics) {
-    const topic = (raw || '').replace(/\s+/g, ' ').trim();
-    if (!topic) continue;
-    if (topic.length < 4 || topic.length > 70) continue;
-    if (LOW_VALUE_TOPIC_PATTERNS.some((pattern) => pattern.test(topic))) continue;
+const TOPIC_DIFF_META: Record<string, { label: string; dot: string }> = {
+  beginner:     { label: 'Beginner',     dot: 'bg-emerald-400' },
+  intermediate: { label: 'Intermediate', dot: 'bg-amber-400'   },
+  advanced:     { label: 'Advanced',     dot: 'bg-red-400'     },
+};
 
-    const normalized = topic.toLowerCase();
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    result.push(topic);
-  }
+// ─── Problem card component ───────────────────────────────────────────────
+function ProblemCard({
+  prob,
+  index,
+  expanded,
+  onToggle,
+}: {
+  prob: Problem;
+  index: number;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const meta = DIFF_META[prob.difficulty] ?? { label: prob.difficulty, badge: 'bg-slate-800 text-slate-400 border-slate-700' };
 
-  return result;
+  return (
+    <div
+      className="rounded-2xl border overflow-hidden transition-shadow hover:shadow-md"
+      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+    >
+      <div className="p-5 sm:p-6">
+        {/* Header row */}
+        <div className="flex items-center gap-2 mb-4">
+          <span
+            className="text-xs font-semibold px-2 py-0.5 rounded-md"
+            style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}
+          >
+            #{index + 1}
+          </span>
+          <span className={`text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border ${meta.badge}`}>
+            {meta.label}
+          </span>
+          <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-900/40 text-indigo-400 border border-indigo-800/40">
+            {prob.marks}m
+          </span>
+        </div>
+
+        {/* Question */}
+        <div className="adoris-prose text-[15px] leading-relaxed mb-4">
+          <MemoMd content={prob.question_text} />
+        </div>
+
+        {/* MCQ options */}
+        {prob.options && prob.options.length > 0 && (
+          <div className="space-y-1.5 mb-4">
+            {prob.options.map((opt, oIdx) => (
+              <div key={oIdx} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                <span className="font-bold shrink-0 mt-0.5 w-5" style={{ color: 'var(--text-muted)' }}>
+                  {String.fromCharCode(65 + oIdx)}.
+                </span>
+                <div className="adoris-prose text-sm">
+                  <MemoMd content={opt} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Answer toggle */}
+        <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+          <button
+            onClick={onToggle}
+            className="flex items-center gap-2 text-xs font-semibold transition-colors w-full"
+            style={{ color: expanded ? 'var(--success)' : 'var(--accent)' }}
+          >
+            <svg
+              className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            {expanded ? 'Hide solution' : 'Show answer & solution'}
+            {prob.options && prob.correct_index !== undefined && expanded && (
+              <span className="ml-auto font-bold" style={{ color: 'var(--success)' }}>
+                Answer: {String.fromCharCode(65 + prob.correct_index)}
+              </span>
+            )}
+          </button>
+
+          {expanded && (
+            <div
+              className="mt-3 p-4 rounded-xl space-y-2"
+              style={{ background: 'var(--bg-muted)' }}
+            >
+              <p className="text-sm font-semibold" style={{ color: 'var(--success)' }}>
+                {prob.answer}
+              </p>
+              <div className="adoris-prose text-sm" style={{ color: 'var(--text-secondary)' }}>
+                <MemoMd content={prob.solution_steps} />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function toKeywordSet(topic: string): Set<string> {
-  const stopwords = new Set([
-    'the', 'a', 'an', 'and', 'or', 'of', 'on', 'in', 'to', 'for', 'with', 'between',
-    'based', 'state', 'concept', 'definition', 'connection', 'mechanics', 'numbers', 'number',
-    'person', 'opens', 'every', 'using', 'from', 'into', 'over', 'under', 'by', 'is', 'are',
-  ]);
-
-  const normalized = topic
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const tokens = normalized
-    .split(' ')
-    .filter((t) => t.length >= 3 && !stopwords.has(t));
-
-  return new Set(tokens);
-}
-
-function overlapRatio(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let intersection = 0;
-  for (const token of a) {
-    if (b.has(token)) intersection++;
-  }
-  return intersection / Math.min(a.size, b.size);
-}
-
-function prettifyTopicLabel(topic: string): string {
-  return topic
-    .replace(/^definition\s+of\s+/i, '')
-    .replace(/^concept\s+of\s+/i, '')
-    .replace(/^connection\s+between\s+/i, '')
-    .replace(/^relationship\s+between\s+/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function buildGeneralizedTopicIndex(
-  rawTopics: string[],
-  conceptsByTopic: Record<string, string[]>,
-  maxTopics = 12
-): Record<string, TopicIndexEntry> {
-  const sanitized = sanitizeTopics(rawTopics);
-  const clusters: Array<{ representative: string; keywords: Set<string>; sourceTopics: string[] }> = [];
-
-  for (const topic of sanitized) {
-    const pretty = prettifyTopicLabel(topic);
-    const keywords = toKeywordSet(pretty);
-
-    let bestIdx = -1;
-    let bestScore = 0;
-
-    for (let i = 0; i < clusters.length; i++) {
-      const score = overlapRatio(keywords, clusters[i].keywords);
-      if (score > bestScore) {
-        bestScore = score;
-        bestIdx = i;
-      }
-    }
-
-    if (bestIdx >= 0 && bestScore >= 0.6) {
-      clusters[bestIdx].sourceTopics.push(topic);
-      for (const token of keywords) clusters[bestIdx].keywords.add(token);
-      if (pretty.length < clusters[bestIdx].representative.length) {
-        clusters[bestIdx].representative = pretty;
-      }
-    } else {
-      clusters.push({ representative: pretty, keywords, sourceTopics: [topic] });
-    }
-  }
-
-  clusters.sort((a, b) => b.sourceTopics.length - a.sourceTopics.length || a.representative.length - b.representative.length);
-
-  const index: Record<string, TopicIndexEntry> = {};
-  for (const cluster of clusters.slice(0, maxTopics)) {
-    const keyConcepts = new Set<string>();
-    for (const sourceTopic of cluster.sourceTopics) {
-      (conceptsByTopic[sourceTopic] || []).forEach((c) => keyConcepts.add(c));
-    }
-
-    index[cluster.representative] = {
-      sourceTopics: cluster.sourceTopics,
-      keyConcepts: Array.from(keyConcepts).slice(0, 12),
-    };
-  }
-
-  return index;
-}
-
+// ─── Page ─────────────────────────────────────────────────────────────────
 export default function ProblemsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
   const [fileName, setFileName] = useState<string | null>(null);
-  const [topics, setTopics] = useState<string[]>([]);
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [practiceTopics, setPracticeTopics] = useState<PracticeTopic[]>([]);
+  const [selectedTopic, setSelectedTopic] = useState<PracticeTopic | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingTopics, setLoadingTopics] = useState(true);
+  const [loadingProblems, setLoadingProblems] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedSolutions, setExpandedSolutions] = useState<Record<string, boolean>>({});
   const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>('all');
   const [existingSets, setExistingSets] = useState<ProblemSetData[]>([]);
-  const [topicIndex, setTopicIndex] = useState<Record<string, TopicIndexEntry>>({});
+  const [completedTopics, setCompletedTopics] = useState<Set<string>>(new Set());
 
-  // ─── Fetch Filename ───────────────────────────────────────────────────
+  // ─── Fetch filename ──────────────────────────────────────────────────
   useEffect(() => {
     async function fetchName() {
       try {
@@ -180,398 +184,461 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
     fetchName();
   }, [id]);
 
-  // ─── Load topics from chapter plan ────────────────────────────────────
-  useEffect(() => {
-    if (!fileName) return;
-
-    const session = loadSession(id);
-    let allTopics: string[] = [];
-    let computedTopicIndex: Record<string, TopicIndexEntry> = {};
-    
-    if (session?.chapterPlan?.page_plans) {
-      const rawTopics = session.chapterPlan.page_plans.flatMap((p) => p.topics);
-      const conceptsByTopic: Record<string, string[]> = {};
-      session.chapterPlan.page_plans.forEach((p) => {
-        p.topics.forEach((t) => {
-          if (!conceptsByTopic[t]) conceptsByTopic[t] = [];
-          conceptsByTopic[t].push(...(p.key_concepts || []));
-        });
-      });
-
-      computedTopicIndex = buildGeneralizedTopicIndex(rawTopics, conceptsByTopic);
-      allTopics = Object.keys(computedTopicIndex);
-    }
-    
-    // Fallback: If no chapter plan or it's empty, pull topics from lessonPlans (dev bypass case)
-    if (allTopics.length === 0 && session?.lessonPlans) {
-      const lessonTopics = Object.values(session.lessonPlans).flatMap(lp => lp.suggestive_doubts || []);
-      if (lessonTopics.length > 0) {
-        computedTopicIndex = buildGeneralizedTopicIndex(lessonTopics, {}, 12);
-        allTopics = Object.keys(computedTopicIndex);
+  // ─── Load existing problem sets ──────────────────────────────────────
+  const loadExistingSets = useCallback(async (fn: string) => {
+    try {
+      const res = await fetch(`/api/pdfs/problem-sets?fileName=${encodeURIComponent(fn)}&chapterId=${id}`);
+      const data = await res.json();
+      if (data.success && data.problemSets) {
+        const mapped: ProblemSetData[] = data.problemSets.map((ps: { topic: string; problems: Problem[] | { problems: Problem[] } }) => ({
+          topic: ps.topic,
+          problems: Array.isArray(ps.problems) ? ps.problems : ((ps.problems as { problems: Problem[] })?.problems || []),
+        }));
+        setExistingSets(mapped);
+        setCompletedTopics(new Set(mapped.filter(s => s.problems.length > 0).map(s => s.topic)));
       }
-    }
+    } catch {/* ignore */}
+  }, [id]);
 
-    setTopicIndex(computedTopicIndex);
-    setTopics(allTopics);
-
-    // Also load any existing problem sets from Supabase
-    async function loadExisting() {
-      try {
-        const res = await fetch(`/api/pdfs/problem-sets?fileName=${encodeURIComponent(fileName!)}&chapterId=${id}`);
-        const data = await res.json();
-        if (data.success && data.problemSets) {
-          const mapped = data.problemSets.map((ps: { topic: string; problems: Problem[] | { problems: Problem[] } }) => ({
-            topic: ps.topic,
-            problems: Array.isArray(ps.problems) ? ps.problems : (ps.problems?.problems || []),
-          }));
-          setExistingSets(mapped);
-
-          if (allTopics.length === 0 && mapped.length > 0) {
-            const fallbackIndex = buildGeneralizedTopicIndex(mapped.map((ps: ProblemSetData) => ps.topic), {}, 12);
-            setTopicIndex(fallbackIndex);
-            setTopics(Object.keys(fallbackIndex));
-          }
-        }
-      } catch {
-        // Ignore — Supabase may not have the table yet
-      } finally {
-        setInitialLoading(false);
-      }
-    }
-    loadExisting();
-  }, [fileName, id]);
-
-  // ─── Generate / load problems for a topic ─────────────────────────────
-  const loadProblemsForTopic = async (topic: string) => {
+  // ─── Load/generate practice topics ──────────────────────────────────
+  const loadTopics = useCallback(async (forceRefresh = false) => {
     if (!fileName) return;
-
+    setLoadingTopics(true);
     setError(null);
+
+    try {
+      const session = loadSession(id);
+
+      // Use cached topics unless forced refresh
+      if (!forceRefresh && session?.chapterPlan?.practice_topics?.length) {
+        setPracticeTopics(session.chapterPlan.practice_topics);
+        setLoadingTopics(false);
+        await loadExistingSets(fileName);
+        return;
+      }
+
+      // If no chapter plan at all, generate one first
+      let pagePlans = session?.chapterPlan?.page_plans;
+      let chapterTitle = session?.chapterPlan?.chapter_title || fileName;
+
+      if (!pagePlans || pagePlans.length === 0 || forceRefresh) {
+        const cpRes = await fetch('/api/pdfs/chapter-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chapterId: id, fileName }),
+        });
+        const cpData = await cpRes.json();
+        if (cpData.success && cpData.chapterPlan) {
+          pagePlans = cpData.chapterPlan.page_plans;
+          chapterTitle = cpData.chapterPlan.chapter_title || fileName;
+          const currentSession = loadSession(id);
+          if (currentSession) saveSession({ ...currentSession, chapterPlan: cpData.chapterPlan });
+        }
+      }
+
+      if (!pagePlans || pagePlans.length === 0) {
+        setError('No chapter plan available. Try uploading a clearer PDF or re-analyzing.');
+        setLoadingTopics(false);
+        return;
+      }
+
+      // Generate curated practice topics via LLM
+      const ptRes = await fetch('/api/pdfs/practice-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pagePlans, chapterTitle }),
+      });
+      const ptData = await ptRes.json();
+
+      if (ptData.success && ptData.practice_topics?.length) {
+        const topics: PracticeTopic[] = ptData.practice_topics;
+        setPracticeTopics(topics);
+        const currentSession = loadSession(id);
+        if (currentSession?.chapterPlan) {
+          saveSession({ ...currentSession, chapterPlan: { ...currentSession.chapterPlan, practice_topics: topics } });
+        }
+      } else {
+        setError('Could not generate practice topics. Please try again.');
+      }
+
+      await loadExistingSets(fileName);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load topics. Check your connection and try again.');
+    } finally {
+      setLoadingTopics(false);
+    }
+  }, [fileName, id, loadExistingSets]);
+
+  useEffect(() => {
+    if (fileName) loadTopics();
+  }, [fileName, loadTopics]);
+
+  // ─── Generate / load problems for a topic ────────────────────────────
+  const handleSelectTopic = useCallback(async (topic: PracticeTopic) => {
+    if (loadingProblems) return;
     setSelectedTopic(topic);
+    setError(null);
     setExpandedSolutions({});
     setDifficultyFilter('all');
 
-    // Check if we already have this topic cached
-    const cached = existingSets.find(s => s.topic === topic);
+    // Check cache — match on topic label or source_topics
+    const cached = existingSets.find(s =>
+      s.topic === topic.label || topic.source_topics?.includes(s.topic)
+    );
     if (cached && cached.problems.length > 0) {
       setProblems(cached.problems);
       return;
     }
 
-    setLoading(true);
+    setLoadingProblems(true);
     setProblems([]);
 
     try {
       const session = loadSession(id);
-      const entry = topicIndex[topic];
-
       const res = await fetch('/api/pdfs/problem-sets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chapterId: id,
           fileName: fileName!,
-          topic,
-          keyConcepts: entry?.keyConcepts || [],
+          topic: topic.label,
+          keyConcepts: topic.key_concepts,
           chapterTitle: session?.chapterPlan?.chapter_title || fileName,
         }),
       });
 
       const data = await res.json();
       if (data.success && data.problemSet) {
-        // Handle both nested and flat problem structures
-        const probs = data.problemSet.problems || [];
-        const problemArray = Array.isArray(probs) ? probs : (probs.problems || []);
+        const probs: Problem[] = data.problemSet.problems || [];
+        const problemArray = Array.isArray(probs) ? probs : ((probs as unknown as { problems: Problem[] })?.problems || []);
         setProblems(problemArray);
+        setCompletedTopics(prev => new Set([...prev, topic.label]));
       } else {
-        console.error('API response:', data);
         throw new Error(data.error || 'Failed to load problems');
       }
     } catch (e) {
-      console.error('Failed to load problems:', e);
-      setError(`Failed to load problems: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Failed to generate problems: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      setLoading(false);
+      setLoadingProblems(false);
     }
-  };
+  }, [existingSets, fileName, id, loadingProblems]);
 
-  const refreshTopics = async () => {
-    if (!fileName) return;
-    setInitialLoading(true);
-    try {
-      const cpRes = await fetch('/api/pdfs/chapter-plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chapterId: id, fileName }),
-      });
-      const cpData = await cpRes.json();
-      if (cpData.success && cpData.chapterPlan) {
-        const rawTopics = cpData.chapterPlan.page_plans.flatMap((p: { topics?: string[] }) => p.topics || []);
-        const conceptsByTopic: Record<string, string[]> = {};
-        cpData.chapterPlan.page_plans.forEach((p: { topics?: string[]; key_concepts?: string[] }) => {
-          (p.topics || []).forEach((t: string) => {
-            if (!conceptsByTopic[t]) conceptsByTopic[t] = [];
-            conceptsByTopic[t].push(...(p.key_concepts || []));
-          });
-        });
+  const filteredProblems = useMemo(
+    () => difficultyFilter === 'all' ? problems : problems.filter(p => p.difficulty === difficultyFilter),
+    [problems, difficultyFilter]
+  );
 
-        const index = buildGeneralizedTopicIndex(rawTopics, conceptsByTopic, 12);
-        setTopicIndex(index);
-        setTopics(Object.keys(index));
-        setError(null);
+  const toggleSolution = useCallback((pid: string) => {
+    setExpandedSolutions(prev => ({ ...prev, [pid]: !prev[pid] }));
+  }, []);
 
-        // Update local session
-        const session = loadSession(id);
-        if (session) {
-          const updated = { ...session, chapterPlan: cpData.chapterPlan };
-          saveSession(updated);
-        }
-      }
-    } catch {
-      console.error('Failed to refresh topics');
-    } finally {
-      setInitialLoading(false);
-    }
-  };
-
-  const toggleSolution = (id: string) => {
-    setExpandedSolutions(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const filteredProblems = difficultyFilter === 'all'
-    ? problems
-    : problems.filter(p => p.difficulty === difficultyFilter);
-
-  const diffColors: Record<string, string> = {
-    foundation: 'bg-blue-900/40 text-blue-400',
-    easy: 'bg-green-900/40 text-green-400',
-    medium: 'bg-amber-900/40 text-amber-400',
-    hard: 'bg-orange-900/40 text-orange-400',
-    exam_level: 'bg-red-900/40 text-red-400',
-    very_hard: 'bg-red-900/40 text-red-400', // backward compat
-  };
-
-  // ─── Loading ──────────────────────────────────────────────────────────
-  if (initialLoading) {
+  // ─── Loading state ────────────────────────────────────────────────────
+  if (loadingTopics) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]" style={{ background: 'var(--bg-base)' }}>
-        <div className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-10 h-10 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          {fileName ? `Curating practice topics for "${fileName}"…` : 'Loading…'}
+        </p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>This may take a few seconds the first time.</p>
       </div>
     );
   }
 
+  const doneCount = completedTopics.size;
+  const totalCount = practiceTopics.length;
+
+  // ─── Render ───────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b z-10" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="transition-colors" style={{ color: 'var(--text-muted)' }} onMouseOver={(e) => e.currentTarget.style.color = 'var(--text-primary)'} onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-muted)'}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold font-serif tracking-tight">Practice Problems</h1>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{fileName}</p>
-          </div>
-        </div>
-      </header>
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar: Topic Selector */}
-        <div className="w-72 flex flex-col shrink-0 border-r" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-            <h2 className="text-sm font-bold">Problem Bank</h2>
-            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }} title={fileName || 'Loading...'}>{fileName || 'Loading...'}</p>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3 space-y-1">
-            {topics.length === 0 ? (
-              <div className="flex flex-col items-center py-8 px-4 text-center">
-                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                  No topics found.<br />
-                  <span className="block mt-2 text-[11px] text-slate-400">
-                    This usually means the chapter plan failed to process or the PDF is missing topic structure.<br />
-                    Try scanning again, or check if your PDF is clear and well-formatted.<br />
-                    If the problem persists, contact support or try a different file.
-                  </span>
-                </p>
-                <button
-                  onClick={refreshTopics}
-                  className="text-[10px] font-bold px-4 py-2 rounded-lg transition-all"
-                  style={{ background: 'var(--accent)', color: 'white' }}
-                >
-                  🔄 Scan Chapter for Topics
-                </button>
-              </div>
-            ) : (
-              topics.map((topic) => {
-                const hasGenerated = existingSets.some(s => s.topic === topic && s.problems.length > 0);
-                const cachedCount = existingSets.find(s => s.topic === topic)?.problems?.length || 0;
-                const isSelected = selectedTopic === topic;
-                return (
-                  <button
-                    key={topic}
-                    onClick={() => loadProblemsForTopic(topic)}
-                    className="w-full text-left p-3 rounded-xl transition-all border"
-                    style={isSelected ? { background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' } : { background: 'var(--bg-elevated)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
-                  >
-                    <div className="font-medium text-sm leading-tight">{topic}</div>
-                    <div className="text-[10px] mt-1.5 opacity-80 flex items-center justify-between">
-                      <span>{hasGenerated ? `${cachedCount} Problems available` : 'Not generated yet'}</span>
-                      {hasGenerated && (
-                        <span className="text-green-500 font-medium">● cached</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-
-          <div className="p-4 border-t" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+      {/* ── Sidebar ──────────────────────────────────────────────────── */}
+      <aside
+        className="w-72 flex flex-col shrink-0 border-r overflow-hidden"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+      >
+        {/* Sidebar header */}
+        <div className="p-4 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-2 mb-3">
             <Link
-              href={`/dashboard/exam/${id}`}
-              className="w-full flex justify-center items-center py-3 text-white rounded-xl font-medium transition-colors shadow-sm"
-              style={{ background: 'var(--error)' }}
+              href="/dashboard"
+              className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors shrink-0"
+              style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}
+              aria-label="Back to dashboard"
             >
-              📝 Take Full Exam
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
             </Link>
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>Practice Problems</h1>
+              <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }} title={fileName || ''}>
+                {fileName}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {error && (
-            <div className="mb-4 p-4 rounded-xl border border-red-500/50 bg-red-900/30 text-red-300">
-              <div className="flex items-start gap-3">
-                <span className="text-lg">⚠️</span>
-                <div>
-                  <h3 className="font-semibold mb-1">Error</h3>
-                  <p className="text-sm">{error}</p>
-                </div>
+          {/* Progress bar */}
+          {totalCount > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Topics practised
+                </span>
+                <span className="text-[11px] font-bold" style={{ color: doneCount === totalCount ? 'var(--success)' : 'var(--text-secondary)' }}>
+                  {doneCount}/{totalCount}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: totalCount ? `${(doneCount / totalCount) * 100}%` : '0%',
+                    background: doneCount === totalCount ? 'var(--success)' : 'var(--accent)',
+                  }}
+                />
               </div>
             </div>
           )}
-          {!selectedTopic ? (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center max-w-sm">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
-                  <span className="text-2xl">📚</span>
-                </div>
-                <h2 className="text-xl font-bold mb-2 text-slate-200">Select a Topic</h2>
-                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  Choose a topic from the sidebar to generate or view problems.
-                  Each topic gets 20 problems covering various difficulty levels and angles.
-                </p>
-              </div>
-            </div>
-          ) : loading ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mb-4" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
-              <p style={{ color: 'var(--text-muted)' }}>Generating 20 problems for <strong>{selectedTopic}</strong>...</p>
+        </div>
+
+        {/* Topic list */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {practiceTopics.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-10 px-4 text-center">
+              <span className="text-3xl">🔍</span>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No practice topics found. Try re-analyzing the chapter.
+              </p>
+              <button
+                onClick={() => loadTopics(true)}
+                className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+                style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+              >
+                Re-analyse Chapter
+              </button>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto">
-              {/* Topic Header */}
-              <div className="mb-5">
-                <h2 className="text-xl font-bold">{selectedTopic}</h2>
-                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{filteredProblems.length} problems</p>
-              </div>
+            practiceTopics.map((topic, idx) => {
+              const isSelected = selectedTopic?.label === topic.label;
+              const isDone = completedTopics.has(topic.label) ||
+                existingSets.some(s => s.topic === topic.label || topic.source_topics?.includes(s.topic));
+              const topicDiff = TOPIC_DIFF_META[topic.difficulty] ?? TOPIC_DIFF_META.intermediate;
 
-              {/* Difficulty Filter */}
-              <div className="mb-5">
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Filter by difficulty</p>
-                <div className="flex gap-1.5 flex-wrap">
-                  {([
-                    { key: 'all', label: 'All', color: 'bg-slate-800 text-slate-300' },
-                    { key: 'foundation', label: '🧱 Foundation', color: 'bg-blue-900 text-blue-300' },
-                    { key: 'easy', label: '✅ Easy', color: 'bg-green-900 text-green-300' },
-                    { key: 'medium', label: '⚡ Medium', color: 'bg-amber-900 text-amber-300' },
-                    { key: 'hard', label: '🔥 Hard', color: 'bg-orange-900 text-orange-300' },
-                    { key: 'exam_level', label: '🎯 Exam Level', color: 'bg-red-900 text-red-300' },
-                  ] as { key: DifficultyFilter; label: string; color: string }[]).map(({ key, label, color }) => (
-                    <button
-                      key={key}
-                      onClick={() => setDifficultyFilter(key)}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
-                        difficultyFilter === key
-                          ? 'text-slate-900 border-transparent' + ' bg-[var(--accent)]'
-                          : `${color} border-transparent hover:opacity-80`
-                      }`}
+              return (
+                <button
+                  key={topic.label}
+                  onClick={() => handleSelectTopic(topic)}
+                  className="w-full text-left p-3 rounded-xl transition-all"
+                  style={isSelected
+                    ? { background: 'rgba(240,165,0,0.12)', outline: '1px solid var(--accent)' }
+                    : { background: 'transparent' }
+                  }
+                >
+                  <div className="flex items-start gap-2.5">
+                    {/* Index badge */}
+                    <span
+                      className="shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold mt-0.5"
+                      style={isSelected
+                        ? { background: 'var(--accent)', color: '#0c0c0e' }
+                        : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }
+                      }
                     >
-                      {label} {key !== 'all' && `(${problems.filter(p => p.difficulty === key).length})`}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                      {isDone ? '✓' : idx + 1}
+                    </span>
 
-              {/* Problems List */}
-              <div className="space-y-4">
-                {filteredProblems.map((prob, idx) => {
-                  const difficultyColor = diffColors[prob.difficulty] || 'bg-slate-800 text-slate-300';
-                  return (
-                    <div key={prob.id || idx} className="rounded-2xl border overflow-hidden shadow-sm" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                      <div className="p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <span className={`text-[10px] uppercase tracking-wider font-bold px-3 py-1 rounded-full ${difficultyColor}`}>
-                            {prob.difficulty.replace('_', ' ')}
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-300 font-medium">
-                            {prob.marks}m
-                          </span>
-                        </div>
-
-                        <div className="prose prose-sm max-w-none prose-invert mb-6 text-[15px] leading-relaxed">
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {prob.question_text}
-                          </ReactMarkdown>
-                        </div>
-                        
-                        {/* MCQ Options */}
-                        {prob.options && prob.options.length > 0 && (
-                          <div className="mt-3 space-y-1.5 mb-4">
-                            {prob.options.map((opt, oIdx) => (
-                              <div key={oIdx} className="flex items-start text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                <span className="font-bold mr-2" style={{ color: 'var(--text-muted)' }}>{String.fromCharCode(65 + oIdx)}.</span>
-                                <div className="prose prose-sm max-w-none prose-invert">
-                                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt}</ReactMarkdown>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="text-sm font-medium leading-tight"
+                        style={{ color: isSelected ? 'var(--accent)' : isDone ? 'var(--text-secondary)' : 'var(--text-primary)' }}
+                      >
+                        {topic.label}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${topicDiff.dot}`} />
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          {topicDiff.label}
+                        </span>
+                        {isDone && (
+                          <span className="text-[10px] ml-auto" style={{ color: 'var(--success)' }}>✓ done</span>
                         )}
-                        
-                        {/* Answer Toggle */}
-                        <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
-                          <button
-                            onClick={() => toggleSolution(prob.id || `${idx}`)}
-                            className="w-full text-xs font-semibold py-2 transition-colors text-left flex items-center justify-between"
-                            style={{ color: 'var(--accent)' }}
-                          >
-                            <span>{expandedSolutions[prob.id || `${idx}`] ? '🔽 Hide Solution' : '🔑 Show Answer & Solution'}</span>
-                            {prob.options && prob.correct_index !== undefined && expandedSolutions[prob.id || `${idx}`] && (
-                              <span className="text-emerald-500">Answer: {String.fromCharCode(65 + prob.correct_index)}</span>
-                            )}
-                          </button>
-
-                          {expandedSolutions[prob.id || `${idx}`] && (
-                            <div className="mt-4 p-4 rounded-xl" style={{ background: 'var(--bg-muted)' }}>
-                              <div className="text-sm font-semibold text-emerald-500 mb-2">Answer: {prob.answer}</div>
-                              <div className="prose prose-sm max-w-none prose-invert" style={{ color: 'var(--text-secondary)' }}>
-                                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                  {prob.solution_steps}
-                                </ReactMarkdown>
-                              </div>
-                            </div>
-                          )}
-                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
-      </div>
+
+        {/* Sidebar footer */}
+        <div className="p-3 border-t shrink-0" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex gap-2">
+            <Link
+              href={`/dashboard/exam/${id}`}
+              className="flex-1 py-2.5 text-center text-xs font-semibold rounded-xl transition-colors"
+              style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+            >
+              Full Exam
+            </Link>
+            <button
+              onClick={() => loadTopics(true)}
+              className="px-3 py-2.5 text-xs rounded-xl border transition-colors"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+              title="Re-analyse chapter topics"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main content ─────────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto">
+        {/* Error banner */}
+        {error && (
+          <div className="m-6 p-4 rounded-xl border flex items-start gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)', color: '#fca5a5' }}>
+            <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
+
+        {/* Empty / select topic state */}
+        {!selectedTopic && !error && (
+          <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 border"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}
+            >
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="var(--text-muted)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+            </div>
+            <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Select a Topic</h2>
+            <p className="text-sm max-w-xs" style={{ color: 'var(--text-muted)' }}>
+              Pick a topic from the sidebar. Each topic generates 20 graded problems — from foundation recall to exam-level application.
+            </p>
+            {totalCount > 0 && (
+              <p className="text-xs mt-4 px-3 py-1.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+                {totalCount} topics available · start with #1
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Loading problems */}
+        {selectedTopic && loadingProblems && (
+          <div className="flex flex-col items-center justify-center h-full gap-4">
+            <div className="w-10 h-10 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              Generating 20 problems on <strong style={{ color: 'var(--text-primary)' }}>{selectedTopic.label}</strong>…
+            </p>
+          </div>
+        )}
+
+        {/* Problems view */}
+        {selectedTopic && !loadingProblems && problems.length > 0 && (
+          <div className="max-w-3xl mx-auto px-6 py-6">
+            {/* Topic header */}
+            <div className="mb-5">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {selectedTopic.label}
+                  </h2>
+                  {selectedTopic.description && (
+                    <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                      {selectedTopic.description}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className="shrink-0 text-[11px] font-semibold px-3 py-1 rounded-full border"
+                  style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
+                >
+                  {TOPIC_DIFF_META[selectedTopic.difficulty]?.label ?? selectedTopic.difficulty}
+                </span>
+              </div>
+            </div>
+
+            {/* Difficulty filter */}
+            <div className="mb-5 flex items-center gap-2 flex-wrap">
+              {([
+                { key: 'all',        label: 'All',         count: problems.length },
+                { key: 'foundation', label: 'Foundation',  count: problems.filter(p => p.difficulty === 'foundation').length },
+                { key: 'easy',       label: 'Easy',        count: problems.filter(p => p.difficulty === 'easy').length },
+                { key: 'medium',     label: 'Medium',      count: problems.filter(p => p.difficulty === 'medium').length },
+                { key: 'hard',       label: 'Hard',        count: problems.filter(p => p.difficulty === 'hard').length },
+                { key: 'exam_level', label: 'Exam',        count: problems.filter(p => p.difficulty === 'exam_level').length },
+              ] as { key: DifficultyFilter; label: string; count: number }[])
+                .filter(f => f.key === 'all' || f.count > 0)
+                .map(({ key, label, count }) => (
+                  <button
+                    key={key}
+                    onClick={() => setDifficultyFilter(key)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full border transition-all"
+                    style={difficultyFilter === key
+                      ? { background: 'var(--accent)', color: '#0c0c0e', borderColor: 'var(--accent)' }
+                      : { background: 'var(--bg-elevated)', color: 'var(--text-muted)', borderColor: 'var(--border)' }
+                    }
+                  >
+                    {label} · {count}
+                  </button>
+                ))}
+            </div>
+
+            {/* Problem cards */}
+            <div className="space-y-4">
+              {filteredProblems.map((prob, idx) => (
+                <ProblemCard
+                  key={prob.id || idx}
+                  prob={prob}
+                  index={idx}
+                  expanded={!!expandedSolutions[prob.id || String(idx)]}
+                  onToggle={() => toggleSolution(prob.id || String(idx))}
+                />
+              ))}
+            </div>
+
+            {/* Footer: next topic CTA */}
+            {filteredProblems.length === problems.length && (
+              <div className="mt-8 pt-6 border-t" style={{ borderColor: 'var(--border)' }}>
+                {(() => {
+                  const currentIdx = practiceTopics.findIndex(t => t.label === selectedTopic.label);
+                  const next = practiceTopics[currentIdx + 1];
+                  return next ? (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Up next</p>
+                        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{next.label}</p>
+                      </div>
+                      <button
+                        onClick={() => handleSelectTopic(next)}
+                        className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                        style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+                      >
+                        Next Topic →
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>
+                        🎉 All topics practised! Ready to take the full exam?
+                      </p>
+                      <Link
+                        href={`/dashboard/exam/${id}`}
+                        className="inline-block px-6 py-3 rounded-xl text-sm font-semibold"
+                        style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+                      >
+                        Take Full Exam
+                      </Link>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

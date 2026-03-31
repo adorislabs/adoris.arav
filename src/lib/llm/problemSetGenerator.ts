@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { tutorConfig } from '@/config/tutorConfig';
+import type { PracticeTopic, PagePlanEntry } from '@/lib/session/sessionStore';
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -258,4 +259,86 @@ Use topic: "${topic}", chapter: "${chapterTitle}", concepts: ${JSON.stringify(ke
   }
 
   return normalized;
+}
+
+/**
+ * Given the raw page_plans from a ChapterPlan, produce 5-10 curated
+ * PracticeTopics that a student can navigate sensibly.
+ *
+ * Uses gemini-2.5-flash-lite for speed/cost — this is a lightweight
+ * classification task, not generation.
+ */
+export async function generatePracticeTopics(
+  pagePlans: PagePlanEntry[],
+  chapterTitle: string
+): Promise<PracticeTopic[]> {
+  const rawTopics = pagePlans.flatMap(p => p.topics);
+  const rawConcepts = pagePlans.flatMap(p => p.key_concepts);
+
+  const prompt = `
+You are a curriculum designer. Given the raw page-by-page topics from a textbook chapter, produce a CURATED list of 5-10 practice topics that a student can navigate to practise.
+
+CHAPTER: "${chapterTitle}"
+RAW TOPICS (from chapter plan): ${JSON.stringify([...new Set(rawTopics)])}
+KEY CONCEPTS: ${JSON.stringify([...new Set(rawConcepts)].slice(0, 30))}
+
+RULES:
+1. Merge similar/overlapping raw topics into ONE labelled practice topic (e.g. "Comparing Fractions (Same Numerator)" + "Comparing Fractions to 1/2" → "Comparing Fractions")
+2. Labels must be SHORT (2-5 words), clean, and concept-level — NOT page descriptions or activity names
+3. Remove "(Activity)", "(Worksheet)", numbered suffixes, and lesson names from labels
+4. Order topics logically — foundational concepts first, advanced last
+5. Each topic gets a one-sentence description for students
+6. Assign difficulty: "beginner" (recall/definition), "intermediate" (application), "advanced" (multi-step/analysis)
+7. Produce AT LEAST 5 topics, AT MOST 10
+8. Include ALL major concepts from the chapter — don't skip anything important
+
+Return ONLY valid JSON:
+{
+  "practice_topics": [
+    {
+      "label": "string (short concept name)",
+      "description": "string (one sentence: what this topic covers)",
+      "key_concepts": ["string", ...],
+      "difficulty": "beginner" | "intermediate" | "advanced",
+      "source_topics": ["original raw topic strings that map here"]
+    }
+  ]
+}
+`;
+
+  const response = await ai.models.generateContent({
+    model: tutorConfig.observerModel,
+    contents: prompt,
+    config: { responseMimeType: 'application/json' },
+  });
+
+  try {
+    const parsed = toParsedJson(response.text || '{}');
+    const topics: PracticeTopic[] = Array.isArray(parsed?.practice_topics)
+      ? parsed.practice_topics.filter((t: any) =>
+          typeof t?.label === 'string' && t.label.trim().length > 0
+        )
+      : [];
+    if (topics.length === 0) throw new Error('Empty practice topics');
+    return topics;
+  } catch {
+    // Fallback: build simple deduped topics from raw data
+    const seen = new Set<string>();
+    return [...new Set(rawTopics)]
+      .filter(t => t && t.length > 3 && t.length < 60)
+      .filter(t => {
+        const key = t.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 10)
+      .map(t => ({
+        label: t.replace(/\s*\(.*?\)\s*/g, '').trim() || t,
+        description: `Practice problems covering ${t}.`,
+        key_concepts: rawConcepts.filter(c => c.toLowerCase().includes(t.toLowerCase().split(' ')[0])).slice(0, 5),
+        difficulty: 'intermediate' as const,
+        source_topics: [t],
+      }));
+  }
 }
