@@ -33,6 +33,23 @@ export async function POST(req: Request) {
       );
     }
 
+    // Validate file size (max 50MB)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: 'File too large. Maximum size is 50MB.' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file type
+    if (file.type !== 'application/pdf') {
+      return NextResponse.json(
+        { error: 'Only PDF files are accepted.' },
+        { status: 400 }
+      );
+    }
+
     // Verify the book belongs to this user and get subject/title
     const { data: book } = await supabase
       .from('books')

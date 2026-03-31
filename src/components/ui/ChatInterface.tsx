@@ -180,8 +180,8 @@ export function ChatInterface({
     ];
     setMessages(newMessages);
 
-    // DEV HACK to manually unlock visually and persist it
-    if (userMessage.toUpperCase() === 'UNLOCK') {
+    // DEV-only bypass for testing mastery unlock
+    if (process.env.NODE_ENV === 'development' && userMessage.toUpperCase() === 'UNLOCK') {
       setIsPageUnlocked(true);
       onSessionUpdate(prev => ({
         ...prev,
@@ -298,10 +298,10 @@ export function ChatInterface({
                 <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                 MANIM VISUALIZATION
               </span>
-              <span className="text-[9px] text-slate-500 uppercase tracking-wider">Interactive render pending</span>
+              <span className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Interactive render pending</span>
             </div>
             <div className="p-6 flex flex-col items-center justify-center min-h-[140px] text-center">
-              <div className="text-slate-500 mb-2">
+              <div style={{ color: 'var(--text-muted)' }} className="mb-2">
                 <svg className="w-8 h-8 mx-auto opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
               </div>
               <p className="text-sm font-medium text-slate-400 italic">"{part.trim()}"</p>
@@ -507,10 +507,10 @@ export function ChatInterface({
         
         {isLoading && (
           <div className="flex justify-start">
-             <div className="p-4 border-t flex gap-2 items-center rounded-2xl p-4 shadow-sm rounded-tl-none flex space-x-1" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+             <div className="flex gap-2 items-center rounded-2xl p-4 shadow-sm rounded-tl-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--text-muted)' }}></div>
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--text-muted)', animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--text-muted)', animationDelay: '0.4s' }}></div>
              </div>
           </div>
         )}
@@ -542,7 +542,8 @@ export function ChatInterface({
         {isPageUnlocked && (
           <button
             onClick={onMasteryAchieved}
-            className="w-full max-w-4xl mx-auto mb-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3 font-semibold shadow-md transition-all flex items-center justify-center gap-2 animate-fade-in"
+            className="w-full max-w-4xl mx-auto mb-3 rounded-xl py-3 font-semibold shadow-md transition-all flex items-center justify-center gap-2 animate-fade-in"
+            style={{ background: 'var(--success)', color: '#fff' }}
           >
             Mastery Achieved! Click to Continue ➔
           </button>
@@ -555,13 +556,14 @@ export function ChatInterface({
             onChange={(e) => setInput(e.target.value)}
             disabled={isLoading}
             placeholder={!lessonPlan ? 'Building lesson plan...' : 'Discuss or answer directly...'}
-              className="w-full text-left p-3 rounded-xl border text-sm transition-all text-slate-300 hover:text-white"
-              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-soft)' }}
+              className="w-full text-left p-3 rounded-xl border text-sm transition-all"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading || !lessonPlan}
-            className="bg-blue-600 text-white px-6 py-3 rounded-full font-medium shadow-md hover:bg-blue-700 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform active:scale-95 flex items-center justify-center min-w-[100px]"
+            className="px-6 py-3 rounded-full font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all transform active:scale-95 flex items-center justify-center min-w-[100px]"
+            style={{ background: 'var(--accent)', color: '#0c0c0e' }}
           >
             {isLoading ? 'Thinking' : 'Send'}
           </button>

@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { ChatInterface } from '@/components/ui/ChatInterface';
 import { PdfViewer } from '@/components/ui/PdfViewer';
@@ -15,7 +16,7 @@ import {
   type PagePlanEntry,
 } from '@/lib/session/sessionStore';
 
-type SessionPhase = 'checking' | 'resume_prompt' | 'generating_plan' | 'active';
+type SessionPhase = 'checking' | 'resume_prompt' | 'generating_plan' | 'active' | 'completed';
 
 export default function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -110,6 +111,10 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
         setSession(sessionToUse);
         setPhase('resume_prompt');
+      } else if (sessionToUse?.quizCompleted) {
+        // Quiz already completed — show completion state
+        setSession(sessionToUse);
+        setPhase('completed');
       } else {
         // No session or quiz already completed — start fresh
         setPhase('generating_plan');
@@ -238,9 +243,9 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
   if (phase === 'checking' || !fileName) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] bg-slate-50">
-        <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-sm text-slate-500">Loading session...</p>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)]" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
+        <p className="mt-4 text-sm" style={{ color: 'var(--text-muted)' }}>Loading session...</p>
       </div>
     );
   }
@@ -248,49 +253,51 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   if (phase === 'resume_prompt' && session) {
     const masteredCount = Object.values(session.masteryStatus).filter(s => s === 'mastered').length;
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] bg-slate-50 p-8">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
-          <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-5">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8" style={{ background: 'var(--bg-base)' }}>
+        <div className="max-w-md w-full rounded-2xl shadow-xl p-8 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: 'var(--accent-muted)' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--accent)">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2 text-center">
+          <h2 className="text-xl font-bold mb-2 text-center" style={{ color: 'var(--text-primary)' }}>
             Resume Previous Session?
           </h2>
-          <p className="text-slate-600 text-center text-sm mb-1">
+          <p className="text-center text-sm mb-1" style={{ color: 'var(--text-secondary)' }}>
             <strong>{fileName}</strong>
           </p>
-          <p className="text-slate-500 text-center text-sm mb-6">
-            You were on <strong>Page {session.currentPage + 1}</strong> of {session.totalPages}
+          <p className="text-center text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+            You were on <strong style={{ color: 'var(--text-primary)' }}>Page {session.currentPage + 1}</strong> of {session.totalPages}
             {' '}&middot;{' '}
-            <strong>{masteredCount}</strong> pages mastered
+            <strong style={{ color: 'var(--text-primary)' }}>{masteredCount}</strong> pages mastered
           </p>
 
           {/* Progress bar */}
-          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
+          <div className="w-full h-2 rounded-full overflow-hidden mb-6" style={{ background: 'var(--bg-muted)' }}>
             <div
-              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all"
-              style={{ width: `${session.totalPages ? (masteredCount / session.totalPages) * 100 : 0}%` }}
+              className="h-full transition-all"
+              style={{ width: `${session.totalPages ? (masteredCount / session.totalPages) * 100 : 0}%`, background: 'var(--accent)' }}
             />
           </div>
 
           <div className="space-y-3">
             <button
               onClick={handleResume}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-colors shadow-sm"
+              className="w-full py-3 rounded-xl font-semibold transition-colors shadow-sm"
+              style={{ background: 'var(--accent)', color: '#0c0c0e' }}
             >
               Resume from Page {session.currentPage + 1}
             </button>
             <button
               onClick={handleStartFresh}
-              className="w-full py-3 bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl font-medium transition-colors"
+              className="w-full py-3 border-2 rounded-xl font-medium transition-colors"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
             >
               Start Fresh
             </button>
           </div>
 
-          <p className="text-[10px] text-slate-400 text-center mt-4">
+          <p className="text-[10px] text-center mt-4" style={{ color: 'var(--text-muted)' }}>
             Last studied: {new Date(session.lastUpdated).toLocaleString()}
           </p>
         </div>
@@ -300,14 +307,53 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
   if (phase === 'generating_plan') {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] bg-slate-50 p-8 space-y-4">
-        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <h2 className="text-xl font-semibold text-slate-700">Analyzing your chapter...</h2>
-        <p className="text-slate-500 max-w-md text-center">
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
+        <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Analyzing your chapter...</h2>
+        <p className="max-w-md text-center" style={{ color: 'var(--text-secondary)' }}>
           The AI is reading every page of <strong>{fileName}</strong> to build a complete lesson plan.
           This ensures no topic is missed.
         </p>
-        <p className="text-xs text-slate-400">This may take 10-15 seconds for larger documents.</p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>This may take 10-15 seconds for larger documents.</p>
+      </div>
+    );
+  }
+
+  if (phase === 'completed' && session) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8" style={{ background: 'var(--bg-base)' }}>
+        <div className="max-w-md w-full rounded-2xl shadow-xl p-8 border text-center" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: 'rgba(34,197,94,0.15)' }}>
+            <span className="text-3xl">🏆</span>
+          </div>
+          <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Chapter Complete!</h2>
+          <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
+            You&apos;ve finished studying <strong>{fileName}</strong>. You can review practice problems, retake the exam, or start over.
+          </p>
+          <div className="space-y-3">
+            <Link
+              href={`/dashboard/problems/${id}`}
+              className="block w-full py-3 rounded-xl font-semibold transition-colors"
+              style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+            >
+              Practice Problems
+            </Link>
+            <Link
+              href={`/dashboard/exam/${id}`}
+              className="block w-full py-3 rounded-xl font-medium transition-colors border"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            >
+              Retake Exam
+            </Link>
+            <button
+              onClick={handleStartFresh}
+              className="w-full py-3 rounded-xl font-medium transition-colors text-sm"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Start Fresh
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -319,30 +365,30 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const pagePlan = getCurrentPagePlan();
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] w-full overflow-hidden bg-slate-50">
+    <div className="flex flex-col h-[calc(100vh-4rem)] w-full overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       
       {/* Session Header / Progress */}
-      <div className="h-12 bg-white border-b border-slate-200 flex items-center px-6 shrink-0 justify-between">
+      <div className="h-12 border-b flex items-center px-6 shrink-0 justify-between" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
          <div className="flex items-center gap-3">
-           <h2 className="text-sm font-semibold text-slate-700 truncate max-w-sm" title={fileName}>
+           <h2 className="text-sm font-semibold truncate max-w-sm" title={fileName} style={{ color: 'var(--text-primary)' }}>
              {session.chapterPlan?.chapter_title || fileName}
            </h2>
            {pagePlan && (
-             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-               pagePlan.estimated_difficulty === 'hard' ? 'bg-red-100 text-red-600' :
-               pagePlan.estimated_difficulty === 'medium' ? 'bg-amber-100 text-amber-600' :
-               'bg-green-100 text-green-600'
+             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+               pagePlan.estimated_difficulty === 'hard' ? 'bg-red-900/30 text-red-400 border-red-800/50' :
+               pagePlan.estimated_difficulty === 'medium' ? 'bg-amber-900/30 text-amber-400 border-amber-800/50' :
+               'bg-green-900/30 text-green-400 border-green-800/50'
              }`}>
                {pagePlan.estimated_difficulty?.toUpperCase()}
              </span>
            )}
          </div>
-         <div className="flex items-center space-x-2 text-xs font-medium text-slate-500">
+         <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
            <span>Page {currentPage + 1} of {session.totalPages || '?'}</span>
-           <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden ml-2">
+           <div className="w-32 h-2 rounded-full overflow-hidden ml-2" style={{ background: 'var(--bg-muted)' }}>
              <div 
-               className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500" 
-               style={{ width: `${session.totalPages ? ((currentPage + 1) / session.totalPages) * 100 : 0}%` }}
+               className="h-full transition-all duration-500" 
+               style={{ width: `${session.totalPages ? ((currentPage + 1) / session.totalPages) * 100 : 0}%`, background: 'var(--accent)' }}
              ></div>
            </div>
          </div>

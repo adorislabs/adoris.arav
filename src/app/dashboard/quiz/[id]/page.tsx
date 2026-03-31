@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -27,9 +27,9 @@ interface Quiz {
 }
 
 const difficultyColors: Record<string, string> = {
-  easy: 'bg-green-100 text-green-700 border-green-200',
-  medium: 'bg-amber-100 text-amber-700 border-amber-200',
-  hard: 'bg-red-100 text-red-700 border-red-200',
+  easy: 'bg-green-900/40 text-green-400 border-green-800/50',
+  medium: 'bg-amber-900/40 text-amber-400 border-amber-800/50',
+  hard: 'bg-red-900/40 text-red-400 border-red-800/50',
 };
 
 const typeLabels: Record<string, string> = {
@@ -38,9 +38,10 @@ const typeLabels: Record<string, string> = {
   fill_blank: 'Fill in the Blank',
 };
 
-export default function QuizPage({ params }: { params: { id: string } }) {
-  const fileName = atob(decodeURIComponent(params.id));
+export default function QuizPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   
+  const [fileName, setFileName] = useState<string | null>(null);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -52,11 +53,26 @@ export default function QuizPage({ params }: { params: { id: string } }) {
   const [finished, setFinished] = useState(false);
   const [answers, setAnswers] = useState<Record<number, { selected: number | null; correct: boolean; fillText?: string }>>({});
 
+  // Fetch chapter name from ID
   useEffect(() => {
+    async function fetchName() {
+      try {
+        const res = await fetch(`/api/chapters/${id}/details`);
+        const data = await res.json();
+        if (data.success && data.fileName) setFileName(data.fileName);
+        else setFileName(atob(decodeURIComponent(id)));
+      } catch {
+        try { setFileName(atob(decodeURIComponent(id))); } catch { setFileName('Unknown'); }
+      }
+    }
+    fetchName();
+  }, [id]);
+
+  useEffect(() => {
+    if (!fileName) return;
     async function fetchQuiz() {
       try {
-        // Load chapter plan and lesson plans from localStorage
-        const session = loadSession(fileName);
+        const session = loadSession(id);
         
         const res = await fetch('/api/pdfs/quiz', {
           method: 'POST',
@@ -79,22 +95,22 @@ export default function QuizPage({ params }: { params: { id: string } }) {
       }
     }
     fetchQuiz();
-  }, [fileName]);
+  }, [fileName, id]);
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] bg-slate-50 p-8 space-y-4">
-         <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-         <h2 className="text-xl font-semibold text-slate-700">Generating your Final Exam...</h2>
-         <p className="text-slate-500 max-w-md text-center">
-            Building a comprehensive 10-question exam covering every topic in {fileName}. This may take a moment.
-         </p>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
+        <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Generating your Final Exam...</h2>
+        <p className="max-w-md text-center" style={{ color: 'var(--text-secondary)' }}>
+          Building a comprehensive 10-question exam covering every topic. This may take a moment.
+        </p>
       </div>
     );
   }
 
   if (!quiz || quiz.questions.length === 0) {
-    return <div className="p-8 text-center text-red-500">Error loading quiz.</div>;
+    return <div className="p-8 text-center" style={{ background: 'var(--bg-base)', color: 'var(--error)' }}>Error loading quiz. <Link href="/dashboard" style={{ color: 'var(--accent)' }}>Return to dashboard</Link></div>;
   }
 
   // ─── Finished State ───────────────────────────────────────────────────
@@ -102,8 +118,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
     const percentage = Math.round((score / quiz.questions.length) * 100);
     const passed = percentage >= 70;
 
-    // Mark quiz as completed in session
-    const session = loadSession(fileName);
+    const session = loadSession(id);
     if (session && !session.quizCompleted) {
       session.quizCompleted = true;
       saveSession(session);
@@ -118,26 +133,25 @@ export default function QuizPage({ params }: { params: { id: string } }) {
     });
 
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] bg-slate-50 p-8 overflow-y-auto">
-        <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
-           <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${passed ? 'bg-green-100 text-green-500' : 'bg-amber-100 text-amber-500'}`}>
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-8 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
+        <div className="max-w-lg w-full rounded-2xl shadow-xl p-8 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+           <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: passed ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)' }}>
               <span className="text-3xl">{passed ? '🏆' : '📚'}</span>
            </div>
-           <h2 className="text-2xl font-bold text-slate-900 mb-1 text-center">
+           <h2 className="text-2xl font-bold mb-1 text-center" style={{ color: 'var(--text-primary)' }}>
              {passed ? 'Chapter Mastered!' : 'Keep Studying!'}
            </h2>
-           <p className="text-center text-slate-600 mb-6 font-medium text-lg">
-             You scored <span className={`font-bold ${passed ? 'text-green-600' : 'text-amber-600'}`}>{score}/{quiz.questions.length}</span> ({percentage}%)
+           <p className="text-center mb-6 font-medium text-lg" style={{ color: 'var(--text-secondary)' }}>
+             You scored <span className="font-bold" style={{ color: passed ? 'var(--success)' : 'var(--warning)' }}>{score}/{quiz.questions.length}</span> ({percentage}%)
            </p>
 
-           {/* Topic Breakdown */}
-           <div className="border-t border-slate-200 pt-4 mb-6">
-             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Topic Breakdown</h3>
+           <div className="border-t pt-4 mb-6" style={{ borderColor: 'var(--border)' }}>
+             <h3 className="text-sm font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Topic Breakdown</h3>
              <div className="space-y-2">
                {Object.entries(topicResults).map(([topic, result]) => (
                  <div key={topic} className="flex items-center justify-between text-sm">
-                   <span className="text-slate-700 truncate mr-4">{topic}</span>
-                   <span className={`font-semibold ${result.correct === result.total ? 'text-green-600' : result.correct === 0 ? 'text-red-500' : 'text-amber-600'}`}>
+                   <span className="truncate mr-4" style={{ color: 'var(--text-secondary)' }}>{topic}</span>
+                   <span className="font-semibold" style={{ color: result.correct === result.total ? 'var(--success)' : result.correct === 0 ? 'var(--error)' : 'var(--warning)' }}>
                      {result.correct}/{result.total}
                    </span>
                  </div>
@@ -145,7 +159,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
              </div>
            </div>
 
-           <Link href="/dashboard" className="block w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors text-center">
+           <Link href="/dashboard" className="block w-full py-3 rounded-lg font-semibold transition-colors text-center" style={{ background: 'var(--accent)', color: '#0c0c0e' }}>
               Return to Dashboard
            </Link>
         </div>
@@ -186,41 +200,41 @@ export default function QuizPage({ params }: { params: { id: string } }) {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50 py-8 px-4 overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-4rem)] py-8 px-4 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
       <div className="max-w-3xl mx-auto w-full">
         
         {/* Exam Header */}
         <div className="mb-6 text-center">
-           <h1 className="text-sm font-semibold text-blue-600 tracking-wider uppercase mb-1">Final Chapter Exam</h1>
-           <h2 className="text-2xl font-bold text-slate-900">{quiz.quiz_title || 'Chapter Assessment'}</h2>
-           <p className="text-slate-500 mt-1 text-sm">Question {currentQ + 1} of {quiz.questions.length}</p>
+           <h1 className="text-sm font-semibold tracking-wider uppercase mb-1" style={{ color: 'var(--accent)' }}>Final Chapter Exam</h1>
+           <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{quiz.quiz_title || 'Chapter Assessment'}</h2>
+           <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Question {currentQ + 1} of {quiz.questions.length}</p>
         </div>
 
         {/* Full Progress Bar */}
-        <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden mb-6">
+        <div className="w-full h-2 rounded-full overflow-hidden mb-6" style={{ background: 'var(--bg-muted)' }}>
           <div 
-            className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500"
-            style={{ width: `${((currentQ) / quiz.questions.length) * 100}%` }}
+            className="h-full transition-all duration-500"
+            style={{ width: `${((currentQ) / quiz.questions.length) * 100}%`, background: 'var(--accent)' }}
           />
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-6 relative overflow-hidden">
+        <div className="rounded-2xl shadow-sm border p-8 mb-6 relative overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
            
            {/* Question Meta Badges */}
            <div className="flex items-center gap-2 mb-5 flex-wrap">
              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${difficultyColors[question.difficulty] || ''}`}>
                {question.difficulty?.toUpperCase()}
              </span>
-             <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+             <span className="text-xs font-medium px-2.5 py-1 rounded-full border" style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
                {typeLabels[question.question_type] || 'MCQ'}
              </span>
-             <span className="text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+             <span className="text-xs px-2.5 py-1 rounded-full border" style={{ background: 'var(--accent-muted)', color: 'var(--accent)', borderColor: 'rgba(240,165,0,0.2)' }}>
                📌 {question.topic}
              </span>
            </div>
 
            {/* Question Text */}
-           <div className="prose prose-slate max-w-none mb-8 text-lg font-medium text-slate-800">
+           <div className="prose max-w-none mb-8 text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                {question.question_text}
              </ReactMarkdown>
@@ -233,13 +247,13 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                  const isSelected = selectedOption === idx;
                  const isCorrect = idx === question.correct_index;
                  
-                 let style = "border-slate-200 hover:border-blue-400 hover:bg-blue-50 bg-white text-slate-700";
+                 let optStyle: React.CSSProperties = { background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' };
                  if (showExplanation) {
-                   if (isCorrect) style = "bg-green-50 border-green-500 text-green-800 ring-1 ring-green-500";
-                   else if (isSelected && !isCorrect) style = "bg-red-50 border-red-500 text-red-800";
-                   else style = "bg-slate-50 border-slate-200 text-slate-400 opacity-50";
+                   if (isCorrect) optStyle = { background: 'rgba(34,197,94,0.1)', borderColor: '#22c55e', color: '#86efac' };
+                   else if (isSelected && !isCorrect) optStyle = { background: 'rgba(239,68,68,0.1)', borderColor: '#ef4444', color: '#fca5a5' };
+                   else optStyle = { background: 'var(--bg-muted)', borderColor: 'var(--border)', color: 'var(--text-muted)', opacity: 0.5 };
                  } else if (isSelected) {
-                   style = "bg-blue-50 border-blue-500 ring-1 ring-blue-500";
+                   optStyle = { background: 'rgba(240,165,0,0.1)', borderColor: 'var(--accent)', color: 'var(--text-primary)' };
                  }
 
                  return (
@@ -247,13 +261,14 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                      key={idx}
                      onClick={() => handleSelect(idx)}
                      disabled={showExplanation}
-                     className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${style}`}
+                     className="w-full text-left p-4 rounded-xl border-2 transition-all duration-200"
+                     style={optStyle}
                    >
                      <div className="flex items-start">
-                       <span className="shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center mr-4 mt-0.5 text-sm font-bold border-current opacity-70">
+                       <span className="shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center mr-4 mt-0.5 text-sm font-bold" style={{ borderColor: 'currentColor', opacity: 0.7 }}>
                          {String.fromCharCode(65 + idx)}
                        </span>
-                       <div className="prose prose-sm max-w-none text-current">
+                       <div className="prose prose-sm max-w-none" style={{ color: 'inherit' }}>
                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                            {opt}
                          </ReactMarkdown>
@@ -273,13 +288,15 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                  value={fillAnswer}
                  onChange={(e) => setFillAnswer(e.target.value)}
                  placeholder="Type your answer..."
-                 className="flex-1 rounded-xl border-2 border-slate-200 px-5 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all bg-white"
+                 className="flex-1 rounded-xl border-2 px-5 py-3 text-base focus:outline-none transition-all"
+                 style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                  onKeyDown={(e) => e.key === 'Enter' && handleFillSubmit()}
                />
                <button
                  onClick={handleFillSubmit}
                  disabled={!fillAnswer.trim()}
-                 className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                 className="px-6 py-3 rounded-xl font-medium disabled:opacity-50 transition-colors"
+                 style={{ background: 'var(--accent)', color: '#0c0c0e' }}
                >
                  Submit
                </button>
@@ -287,31 +304,30 @@ export default function QuizPage({ params }: { params: { id: string } }) {
            )}
 
            {isFillinBlank && showExplanation && (
-             <div className={`p-4 rounded-xl mb-4 ${answers[currentQ]?.correct ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-               <p className="text-sm font-medium">
+             <div className="p-4 rounded-xl mb-4 border" style={{ background: answers[currentQ]?.correct ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', borderColor: answers[currentQ]?.correct ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }}>
+               <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                  Your answer: <span className="font-bold">{answers[currentQ]?.fillText}</span>
                </p>
                {!answers[currentQ]?.correct && (
                  <p className="text-sm mt-1">
-                   Correct answer: <span className="font-bold text-green-700">{question.correct_answer}</span>
+                   Correct answer: <span className="font-bold" style={{ color: 'var(--success)' }}>{question.correct_answer}</span>
                  </p>
                )}
              </div>
            )}
 
-           {/* Explanation */}
            {showExplanation && (
-             <div className={`mt-6 p-6 rounded-xl animate-in fade-in slide-in-from-top-4 ${
-               (isFillinBlank ? answers[currentQ]?.correct : selectedOption === question.correct_index) 
-                 ? 'bg-green-50' : 'bg-red-50'
-             }`}>
+             <div className="mt-6 p-6 rounded-xl border" style={{ 
+               background: (isFillinBlank ? answers[currentQ]?.correct : selectedOption === question.correct_index) ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+               borderColor: (isFillinBlank ? answers[currentQ]?.correct : selectedOption === question.correct_index) ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
+             }}>
                <div className="flex items-center mb-2">
                  {(isFillinBlank ? answers[currentQ]?.correct : selectedOption === question.correct_index)
-                   ? <span className="text-green-600 font-bold">✅ Correct</span>
-                   : <span className="text-red-600 font-bold">❌ Incorrect</span>
+                   ? <span className="font-bold" style={{ color: 'var(--success)' }}>✅ Correct</span>
+                   : <span className="font-bold" style={{ color: 'var(--error)' }}>❌ Incorrect</span>
                  }
                </div>
-               <div className="prose prose-sm max-w-none text-slate-700">
+               <div className="prose prose-sm max-w-none" style={{ color: 'var(--text-secondary)' }}>
                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                    {question.explanation}
                  </ReactMarkdown>
@@ -319,7 +335,8 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                <div className="mt-6 flex justify-end">
                   <button 
                     onClick={handleNext}
-                    className="px-6 py-2.5 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors shadow-sm"
+                    className="px-6 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
+                    style={{ background: 'var(--accent)', color: '#0c0c0e' }}
                   >
                     {currentQ + 1 < quiz.questions.length ? "Next Question →" : "Finish Exam"}
                   </button>

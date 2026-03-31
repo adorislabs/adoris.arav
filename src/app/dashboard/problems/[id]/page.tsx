@@ -342,19 +342,19 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
     : problems.filter(p => p.difficulty === difficultyFilter);
 
   const diffColors: Record<string, string> = {
-    foundation: 'bg-blue-100 text-blue-700',
-    easy: 'bg-green-100 text-green-700',
-    medium: 'bg-amber-100 text-amber-700',
-    hard: 'bg-orange-100 text-orange-700',
-    exam_level: 'bg-red-100 text-red-700',
-    very_hard: 'bg-red-100 text-red-700', // backward compat
+    foundation: 'bg-blue-900/40 text-blue-400',
+    easy: 'bg-green-900/40 text-green-400',
+    medium: 'bg-amber-900/40 text-amber-400',
+    hard: 'bg-orange-900/40 text-orange-400',
+    exam_level: 'bg-red-900/40 text-red-400',
+    very_hard: 'bg-red-900/40 text-red-400', // backward compat
   };
 
   // ─── Loading ──────────────────────────────────────────────────────────
   if (initialLoading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)] bg-slate-50">
-        <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
       </div>
     );
   }
@@ -429,7 +429,8 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
           <div className="p-4 border-t" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
             <Link
               href={`/dashboard/exam/${id}`}
-              className="w-full flex justify-center items-center py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors shadow-sm"
+              className="w-full flex justify-center items-center py-3 text-white rounded-xl font-medium transition-colors shadow-sm"
+              style={{ background: 'var(--error)' }}
             >
               📝 Take Full Exam
             </Link>
@@ -464,8 +465,8 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
             </div>
           ) : loading ? (
             <div className="flex flex-col items-center justify-center h-full">
-              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-slate-500">Generating 20 problems for <strong>{selectedTopic}</strong>...</p>
+              <div className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mb-4" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
+              <p style={{ color: 'var(--text-muted)' }}>Generating 20 problems for <strong>{selectedTopic}</strong>...</p>
             </div>
           ) : (
             <div className="max-w-3xl mx-auto">
@@ -492,7 +493,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
                       onClick={() => setDifficultyFilter(key)}
                       className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
                         difficultyFilter === key
-                          ? 'bg-white text-slate-900 border-white'
+                          ? 'text-slate-900 border-transparent' + ' bg-[var(--accent)]'
                           : `${color} border-transparent hover:opacity-80`
                       }`}
                     >
