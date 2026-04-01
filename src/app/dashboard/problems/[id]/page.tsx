@@ -168,6 +168,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
   const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>('all');
   const [existingSets, setExistingSets] = useState<ProblemSetData[]>([]);
   const [completedTopics, setCompletedTopics] = useState<Set<string>>(new Set());
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   // ─── Fetch filename ──────────────────────────────────────────────────
   useEffect(() => {
@@ -336,7 +337,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
   // ─── Loading state ────────────────────────────────────────────────────
   if (loadingTopics) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center h-full gap-4" style={{ background: 'var(--bg-base)' }}>
         <div className="w-10 h-10 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           {fileName ? `Curating practice topics for "${fileName}"…` : 'Loading…'}
@@ -351,11 +352,65 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
 
   // ─── Render ───────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
+    <div className="flex h-full overflow-hidden" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
 
-      {/* ── Sidebar ──────────────────────────────────────────────────── */}
+      {/* Mobile Sidebar Overlay */}
+      {showMobileSidebar && (
+        <div className="md:hidden fixed inset-0 z-50 flex" onClick={() => setShowMobileSidebar(false)}>
+          <div className="absolute inset-0" style={{ background: 'rgba(12,12,14,0.7)' }} />
+          <div className="relative flex flex-col border-r overflow-hidden w-80 max-w-[85vw]" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }} onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Topics</h2>
+              <button onClick={() => setShowMobileSidebar(false)} className="w-7 h-7 flex items-center justify-center rounded-lg" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            {totalCount > 0 && (
+              <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Topics practised</span>
+                  <span className="text-[11px] font-bold" style={{ color: doneCount === totalCount ? 'var(--success)' : 'var(--text-secondary)' }}>{doneCount}/{totalCount}</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: totalCount ? `${(doneCount / totalCount) * 100}%` : '0%', background: doneCount === totalCount ? 'var(--success)' : 'var(--accent)' }} />
+                </div>
+              </div>
+            )}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {practiceTopics.map((topic, idx) => {
+                const isSelected = selectedTopic?.label === topic.label;
+                const isDone = completedTopics.has(topic.label) || existingSets.some(s => s.topic === topic.label || topic.source_topics?.includes(s.topic));
+                const topicDiff = TOPIC_DIFF_META[topic.difficulty] ?? TOPIC_DIFF_META.intermediate;
+                return (
+                  <button key={topic.label} onClick={() => { handleSelectTopic(topic); setShowMobileSidebar(false); }}
+                    className="w-full text-left p-3 rounded-xl transition-all"
+                    style={isSelected ? { background: 'rgba(240,165,0,0.12)', outline: '1px solid var(--accent)' } : { background: 'transparent' }}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <span className="shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold mt-0.5" style={isSelected ? { background: 'var(--accent)', color: '#0c0c0e' } : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>{isDone ? '✓' : idx + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium leading-tight" style={{ color: isSelected ? 'var(--accent)' : isDone ? 'var(--text-secondary)' : 'var(--text-primary)' }}>{topic.label}</div>
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${topicDiff.dot}`} />
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{topicDiff.label}</span>
+                          {isDone && <span className="text-[10px] ml-auto" style={{ color: 'var(--success)' }}>✓ done</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
+              <Link href={`/dashboard/exam/${id}`} className="block w-full py-2.5 text-center text-xs font-semibold rounded-xl" style={{ background: 'var(--accent)', color: '#0c0c0e' }}>Full Exam</Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Desktop Sidebar ──────────────────────────────────────────────── */}
       <aside
-        className="w-72 flex flex-col shrink-0 border-r overflow-hidden"
+        className="hidden md:flex w-72 flex-col shrink-0 border-r overflow-hidden"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
       >
         {/* Sidebar header */}
@@ -495,7 +550,29 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
       </aside>
 
       {/* ── Main content ─────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 flex flex-col overflow-hidden">
+
+        {/* Mobile top bar */}
+        <div className="md:hidden flex items-center justify-between px-4 h-12 border-b shrink-0" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <Link href="/dashboard" className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </Link>
+            <span className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+              {selectedTopic ? selectedTopic.label : 'Practice'}
+            </span>
+          </div>
+          <button
+            onClick={() => setShowMobileSidebar(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg shrink-0"
+            style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}
+          >
+            Topics
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
         {/* Error banner */}
         {error && (
           <div className="m-6 p-4 rounded-xl border flex items-start gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)', color: '#fca5a5' }}>
@@ -638,6 +715,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
             )}
           </div>
         )}
+        </div>
       </main>
     </div>
   );

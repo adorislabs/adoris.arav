@@ -99,7 +99,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center h-full p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
         <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
         <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Generating your Final Exam...</h2>
         <p className="max-w-md text-center" style={{ color: 'var(--text-secondary)' }}>
@@ -133,7 +133,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
     });
 
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-8 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center min-h-full p-8 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
         <div className="max-w-lg w-full rounded-2xl shadow-xl p-8 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: passed ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)' }}>
               <span className="text-3xl">{passed ? '🏆' : '📚'}</span>
@@ -200,7 +200,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] py-8 px-4 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
+    <div className="flex flex-col h-full py-8 px-4 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
       <div className="max-w-3xl mx-auto w-full">
         
         {/* Exam Header */}

@@ -23,6 +23,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   const [showAnswerKey, setShowAnswerKey] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60 * 60); // 60 minutes in seconds
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // ─── Fetch Filename ───────────────────────────────────────────────────
@@ -211,7 +212,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   // ─── Loading ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center h-full p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
         <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
         <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Generating your 60-Mark Exam...</h2>
         <p className="max-w-md text-center" style={{ color: 'var(--text-secondary)' }}>
@@ -223,7 +224,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
 
   if (!exam || !exam.sections || exam.sections.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center min-h-full p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
         <div className="w-16 h-16 rounded-full flex items-center justify-center mb-2" style={{ background: 'rgba(239,68,68,0.15)' }}>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="var(--error)">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -259,7 +260,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     const pct = Math.round((result.earned / result.total) * 100);
 
     return (
-      <div className="flex flex-col min-h-[calc(100vh-4rem)] p-8 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col min-h-full p-4 sm:p-8 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
         <div className="max-w-2xl mx-auto w-full">
           <div className="rounded-2xl shadow-xl p-8 border mb-6" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4`} style={{ background: pct >= 70 ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)' }}>
@@ -330,9 +331,54 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   const isLastQ = activeSection === exam.sections.length - 1 && activeQ === currentSection!.questions.length - 1;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden" style={{ background: 'var(--bg-base)' }}>
-      {/* Sidebar: Section Navigator */}
-      <div className="w-64 flex flex-col shrink-0 border-r" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+    <div className="flex h-full overflow-hidden" style={{ background: 'var(--bg-base)' }}>
+
+      {/* Mobile Nav Overlay */}
+      {showMobileNav && (
+        <div className="md:hidden fixed inset-0 z-50 flex" onClick={() => setShowMobileNav(false)}>
+          <div className="absolute inset-0" style={{ background: 'rgba(12,12,14,0.7)' }} />
+          <div className="relative w-72 flex flex-col border-r overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }} onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+              <div>
+                <h2 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{exam.exam_title}</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{answeredCount}/{totalQuestions} answered</p>
+              </div>
+              <button onClick={() => setShowMobileNav(false)} className="w-7 h-7 flex items-center justify-center rounded-lg" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {exam.sections.map((sec, sIdx) => {
+                const sectionStartIdx = exam.sections.slice(0, sIdx).reduce((sum, s) => sum + s.questions.length, 0);
+                return (
+                  <div key={sIdx}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider mb-1 px-1" style={{ color: 'var(--text-muted)' }}>{sec.section_name.split(':')[0]} ({sec.marks_per_question}m)</p>
+                    <div className="grid grid-cols-5 gap-1">
+                      {sec.questions.map((q, qIdx) => {
+                        const gIdx = sectionStartIdx + qIdx;
+                        const isActive = activeSection === sIdx && activeQ === qIdx;
+                        const isAnswered = answers[gIdx]?.answered;
+                        return (
+                          <button key={qIdx} onClick={() => { goToQuestion(sIdx, qIdx); setShowMobileNav(false); }}
+                            className={`w-8 h-8 rounded-md text-xs font-bold transition-all`}
+                            style={isActive ? { background: 'var(--accent)', color: '#0c0c0e' } : isAnswered ? { background: 'rgba(34,197,94,0.15)', color: '#86efac', border: '1px solid rgba(34,197,94,0.3)' } : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }}
+                          >{q.question_number}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
+              <button onClick={() => { setSubmitted(true); setShowAnswerKey(true); if (timerRef.current) clearInterval(timerRef.current); }} className="w-full py-2.5 rounded-lg font-semibold text-sm" style={{ background: 'var(--error)', color: '#fff' }}>Submit Exam</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Sidebar: Section Navigator */}
+      <div className="hidden md:flex w-64 flex-col shrink-0 border-r" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
         <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
           <h2 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{exam.exam_title}</h2>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{answeredCount}/{totalQuestions} answered</p>
@@ -402,7 +448,18 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       {/* Main Question Area */}
-      <div className="flex-1 overflow-y-auto p-8" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--bg-base)' }}>
+
+        {/* Mobile Top Bar */}
+        <div className="md:hidden flex items-center justify-between px-4 h-12 border-b shrink-0" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+          <span className="text-sm font-mono font-bold" style={{ color: timeLeft < 300 ? 'var(--error)' : 'var(--accent)' }}>⏱ {formatTime(timeLeft)}</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Q{currentQ?.question_number ?? '?'} / {totalQuestions}</span>
+          <button onClick={() => setShowMobileNav(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
+            Grid ⊞
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
         {currentQ && currentSection && (
           <div className="max-w-3xl mx-auto">
             {/* Section Header */}
@@ -511,6 +568,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

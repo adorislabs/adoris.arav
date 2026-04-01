@@ -249,7 +249,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
   if (phase === 'checking' || !fileName) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)]" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center h-full" style={{ background: 'var(--bg-base)' }}>
         <div className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
         <p className="mt-4 text-sm" style={{ color: 'var(--text-muted)' }}>Loading session...</p>
       </div>
@@ -259,7 +259,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   if (phase === 'resume_prompt' && session) {
     const masteredCount = Object.values(session.masteryStatus).filter(s => s === 'mastered').length;
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center h-full p-8" style={{ background: 'var(--bg-base)' }}>
         <div className="max-w-md w-full rounded-2xl shadow-xl p-8 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: 'var(--accent-muted)' }}>
             <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--accent)">
@@ -313,7 +313,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
   if (phase === 'generating_plan') {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center h-full p-8 space-y-4" style={{ background: 'var(--bg-base)' }}>
         <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}></div>
         <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Analyzing your chapter...</h2>
         <p className="max-w-md text-center" style={{ color: 'var(--text-secondary)' }}>
@@ -327,7 +327,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
   if (phase === 'completed' && session) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-8" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex flex-col items-center justify-center h-full p-8" style={{ background: 'var(--bg-base)' }}>
         <div className="max-w-md w-full rounded-2xl shadow-xl p-8 border text-center" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: 'rgba(34,197,94,0.15)' }}>
             <span className="text-3xl">🏆</span>
@@ -371,7 +371,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const pagePlan = getCurrentPagePlan();
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] w-full overflow-hidden" style={{ background: 'var(--bg-base)' }}>
+    <div className="flex flex-col h-full w-full overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       
       {/* Session Header / Progress */}
       <div className="h-12 border-b flex items-center px-6 shrink-0 justify-between" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
