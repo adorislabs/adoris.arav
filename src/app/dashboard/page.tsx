@@ -25,8 +25,11 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch('/api/books');
-        const data = await res.json();
+        const [booksRes, sessionsRes] = await Promise.all([
+          fetch('/api/books'),
+          fetch('/api/pdfs/sessions-batch'),
+        ]);
+        const data = await booksRes.json();
         if (data.success) {
           const allChapters = data.books.flatMap((b: any) =>
             b.chapters.map((c: any) => ({
@@ -39,31 +42,22 @@ export default function DashboardPage() {
           );
           setPdfs(allChapters);
 
-          // Fetch session info from cloud for each chapter
-          const infos: Record<string, SessionInfo | null> = {};
-          await Promise.all(
-            allChapters.map(async (p: ChapterPdf) => {
-              try {
-                const sRes = await fetch(`/api/pdfs/session?chapterId=${p.id}`);
-                const sData = await sRes.json();
-                if (sData.success && sData.session) {
-                  const s = sData.session;
-                  infos[p.id] = {
-                    currentPage: s.currentPage || 0,
-                    totalPages: s.totalPages || 0,
-                    masteredCount: Object.values(s.masteryStatus || {}).filter((v: any) => v === 'mastered').length,
-                    quizCompleted: s.quizCompleted || false,
-                    lastUpdated: s.lastUpdated || '',
-                  };
-                } else {
-                  infos[p.id] = null;
-                }
-              } catch {
-                infos[p.id] = null;
-              }
-            })
-          );
-          setSessionInfos(infos);
+          // Use batch session API (single query instead of N+1)
+          const sessionsData = await sessionsRes.json();
+          if (sessionsData.success && sessionsData.sessions) {
+            const infos: Record<string, SessionInfo | null> = {};
+            for (const ch of allChapters) {
+              const s = sessionsData.sessions[ch.id];
+              infos[ch.id] = s ? {
+                currentPage: s.currentPage || 0,
+                totalPages: s.totalPages || 0,
+                masteredCount: s.masteredCount || 0,
+                quizCompleted: s.quizCompleted || false,
+                lastUpdated: s.lastUpdated || '',
+              } : null;
+            }
+            setSessionInfos(infos);
+          }
         }
       } catch { /* ignore */ }
       finally { setLoading(false); }

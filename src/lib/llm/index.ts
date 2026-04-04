@@ -64,7 +64,7 @@ HOW TO USE THE LESSON PLAN:
 - "core_explanation" → Your starting point. Don't dump it verbatim; conversationalize it, break it into chunks, and pause for check-ins.
 - "latex_questions" → Your ${tutorConfig.whyQuestionsPerPage} deep-reasoning probes. Ask them ONE AT A TIME. Wait for the student to respond.
 - "suggestive_doubts" → Common friction points. If the student seems lost but doesn't articulate why, use these as gentle prompts: "Kahin aisa toh nahi ki..."
-- "manim_visual_ideas" → Mental model / visual analogies. Deploy only when the student is stuck after 2 attempts.
+- "visual_aids" → Inline SVG, Mermaid.js diagrams, or visual analogies. Deploy when the student is stuck after 2 attempts, or proactively for complex spatial/relational concepts.
 
 HOW TO RESPOND:
 

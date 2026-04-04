@@ -42,7 +42,7 @@ The JSON must follow exactly this structure:
   ],
   "application_problem": "A novel mini-problem that applies the core concept in a new context (different from the textbook examples). This is the final test before mastery. Use LaTeX for any math.",
   "prerequisite_concepts": ["List of concepts from PREVIOUS pages the student should already know to understand this page"],
-  "manim_visual_ideas": "A short text describing a mental visual analogy or a Manim animation idea based on diagrams or core formulas on the page.",
+  "visual_aids": "A short inline SVG snippet, a Mermaid.js diagram code block, or a text description of a visual analogy that helps explain the concept. Prefer actual SVG or mermaid code the student can see rendered. For math, use diagrams; for processes, use flowcharts; for comparisons, use tables.",
   "suggestive_doubts": [
     "A button label for a common student doubt (e.g. 'Formula derivation mein problem hai')",
     "Another doubt button (e.g. 'Can you give a real life example?')",

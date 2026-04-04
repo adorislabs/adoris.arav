@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import type { Message, LessonPlan, PagePlanEntry, SessionState, ObserverState } from '@/lib/session/sessionStore';
+import type { Message, LessonPlan, PagePlanEntry, SessionState } from '@/lib/session/sessionStore';
 
 // ─── Memoized markdown renderer ─────────────────────────────────────────
 const MemoMarkdown = memo(function MemoMarkdown({ content }: { content: string }) {
@@ -40,7 +40,6 @@ export function ChatInterface({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [lessonPlan, setLessonPlan] = useState<LessonPlan | null>(initialLessonPlan);
-  const [topicsChecked, setTopicsChecked] = useState<Record<string, boolean>>({});
   const [isPageUnlocked, setIsPageUnlocked] = useState(sessionState.masteryStatus[currentPage] === 'mastered');
 
   useEffect(() => {
@@ -210,12 +209,26 @@ export function ChatInterface({
         setMessages(updatedMsgs);
         persistMessages(updatedMsgs);
       }
+
+      // Track struggles from observer data
+      if (data.observerData?.confusion_points?.length || data.observerData?.gaps?.length) {
+        try {
+          const topic = pagePlanEntry?.topics?.[0] || 'unknown';
+          for (const point of (data.observerData.confusion_points || [])) {
+            fetch('/api/tracking/struggle', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chapterId: sessionId, topic, concept: point, struggleType: 'confusion_detected', severity: 2 }),
+            });
+          }
+        } catch { /* fire and forget */ }
+      }
     } catch (error) {
       console.error('Chat error:', error);
       const errMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'System error. Unable to process transmission.',
+        content: 'Something went wrong. Please try again.',
       };
       const updatedMsgs = [...newMessages, errMsg];
       setMessages(updatedMsgs);
@@ -233,62 +246,53 @@ export function ChatInterface({
     }
   };
 
+  // Quick doubt buttons
+  const handleQuickDoubt = (doubt: string) => {
+    setInput(doubt);
+    setTimeout(() => {
+      const form = textareaRef.current?.closest('form');
+      if (form) form.requestSubmit();
+    }, 50);
+  };
+
+  const diffColor = pagePlanEntry?.estimated_difficulty === 'hard' ? 'var(--error)' :
+    pagePlanEntry?.estimated_difficulty === 'medium' ? 'var(--warning)' : 'var(--success)';
+
   return (
-    <div className="flex flex-col h-full w-full bg-base font-mono relative overflow-hidden">
-      <div className="flex-none p-4 border-b border-dim bg-surface glass-panel flex flex-col z-10 tech-border">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-none bg-accent animate-glow"></div>
-            <h2 className="text-sm font-bold uppercase tracking-widest text-primary truncate max-w-[200px] md:max-w-md">
-              Target: <span className="text-accent">{fileName}</span>
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs uppercase text-dim">Mode: Active Tutor</span>
+    <div className="flex flex-col h-full w-full relative overflow-hidden" style={{ background: 'var(--bg-base)' }}>
+      
+      {/* Clean header */}
+      <div className="flex-none px-5 py-3.5 border-b flex items-center justify-between" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: isPageUnlocked ? 'var(--success)' : diffColor, opacity: isPageUnlocked ? 1 : 0.7 }} />
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+              {pagePlanEntry?.topics?.[0] || `Page ${currentPage + 1}`}
+            </p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {isPageUnlocked ? 'Concept mastered' : pagePlanEntry?.estimated_difficulty ? `${pagePlanEntry.estimated_difficulty} difficulty` : 'In progress'}
+            </p>
           </div>
         </div>
-
-        {lessonPlan && (
-          <div className="mt-2 text-xs flex gap-4 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap pt-1">
-            <div className="flex items-center gap-1 border border-dim px-2 py-1">
-              <span className="text-dim">Status:</span> 
-              <span className={isPageUnlocked ? "text-success font-bold" : "text-warning text-[10px] animate-pulse"}>
-                {isPageUnlocked ? "UNLOCKED" : "LOCKED"}
-              </span>
-            </div>
-            {pagePlanEntry?.estimated_difficulty && (
-              <div className="flex items-center gap-1 border border-dim px-2 py-1">
-                <span className="text-dim">Difficulty:</span>
-                <span className="text-accent uppercase">{pagePlanEntry.estimated_difficulty}</span>
-              </div>
-            )}
-            {lessonPlan.suggestive_doubts?.slice(0, 2).map((doubt, i) => (
-              <div key={i} className="flex items-center gap-2 border border-dim px-2 py-1 bg-elevated">
-                <span className="text-dim">[?]</span>
-                <span className="text-text-primary">{doubt}</span>
-              </div>
-            ))}
-          </div>
+        {isPageUnlocked && (
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(64,145,108,0.1)', color: 'var(--success)' }}>
+            ✓ Mastered
+          </span>
         )}
       </div>
 
-      <div 
-        ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 relative"
-      >
-        <div className="fixed inset-0 pointer-events-none opacity-5 z-0" 
-          style={{ backgroundImage: 'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)', backgroundSize: '40px 40px', mixBlendMode: 'overlay' }}>
-        </div>
+      {/* Messages */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-4">
 
         {displayTimeline.map((item, idx) => {
           if (item.type === 'separator') {
             return (
-              <div key={`sep-${item.page}-${idx}`} className="flex items-center pt-8 pb-4 relative z-10 w-full animate-fadeIn" style={{ animationDelay: '0.1s' }}>
-                <div className="flex-1 h-[1px] bg-dim opacity-30"></div>
-                <div className="px-4 py-1 border border-dim bg-bg-surface text-[10px] uppercase font-bold text-accent glass-panel tracking-widest shadow-[0_0_10px_var(--accent-muted)]">
-                  [ System.Page_{item.page + 1}.Initialized ]
-                </div>
-                <div className="flex-1 h-[1px] bg-dim opacity-30"></div>
+              <div key={`sep-${item.page}-${idx}`} className="flex items-center py-3 animate-fadeIn">
+                <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+                <span className="px-3 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  Page {item.page + 1}
+                </span>
+                <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
               </div>
             );
           }
@@ -298,46 +302,41 @@ export function ChatInterface({
           const isUser = msg.role === 'user';
           
           return (
-            <div key={msg.id} className={`flex w-full animate-slideUp relative z-10 ${isUser ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex max-w-[90%] md:max-w-[80%] flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-
-                <div className="text-[10px] md:text-xs uppercase font-mono text-dim mb-1 tracking-wider flex items-center gap-2">
-                  {isUser ? (
-                    <><span>You</span> <div className="w-[1px] h-3 bg-dim"></div> <span className="text-text-muted">TX</span></>
-                  ) : (
-                    <><span className="text-accent font-bold glow-text">Tutor</span> <div className="w-[1px] h-3 bg-dim"></div> <span className="text-text-muted">RX</span></>
-                  )}
-                </div>
-
-                <div className={`p-4 tech-border ${
-                  isUser 
-                    ? 'border-r-2 border-r-success bg-surface/80 text-primary self-end backdrop-blur-md' 
-                    : 'border-l-2 border-l-accent glass-panel text-primary shadow-[0_4px_24px_var(--accent-muted)]'
-                }`}>
+            <div key={msg.id} className={`flex w-full animate-slideUp ${isUser ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[88%] md:max-w-[78%]`}>
+                <div className={`rounded-2xl px-5 py-4 ${isUser ? 'rounded-br-md' : 'rounded-bl-md'}`} style={{
+                  background: isUser ? 'var(--accent)' : 'var(--bg-surface)',
+                  color: isUser ? '#fff' : 'var(--text-primary)',
+                  border: isUser ? 'none' : '1px solid var(--border)',
+                  boxShadow: isUser ? 'none' : '0 1px 3px rgba(0,0,0,0.04)',
+                }}>
                   {msg.id === 'system-loading' ? (
-                     <div className="text-accent font-mono text-sm py-2">
-                       Processing Page Data...
-                     </div>
+                    <div className="flex items-center gap-3 py-1">
+                      <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Preparing your lesson...</span>
+                    </div>
                   ) : (
-                    <div className="adoris-prose">
+                    <div className={isUser ? 'text-sm leading-relaxed' : 'adoris-prose'}>
                       <MemoMarkdown content={msg.content} />
                     </div>
                   )}
                 </div>
-
               </div>
             </div>
           );
         })}
 
+        {/* Loading indicator */}
         {isLoading && messages[messages.length - 1]?.role === 'user' && (
-          <div className="flex w-full justify-start animate-fadeIn pt-4 relative z-10">
-            <div className="max-w-[80%] flex flex-col items-start">
-              <div className="text-[10px] uppercase text-dim mb-1 tracking-wider font-mono">
-                 <span className="text-accent font-bold">Tutor</span> : Processing
-              </div>
-              <div className="p-4 tech-border border-l-2 border-l-accent glass-panel w-32 shadow-[0_4px_24px_var(--accent-muted)]">
-                 <div className="text-dim text-xs font-mono animate-pulse">Computing...</div>
+          <div className="flex w-full justify-start animate-fadeIn">
+            <div className="rounded-2xl rounded-bl-md px-5 py-4 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '300ms' }} />
+                </div>
+                <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>Thinking...</span>
               </div>
             </div>
           </div>
@@ -345,51 +344,60 @@ export function ChatInterface({
         <div ref={messagesEndRef} className="h-1" />
       </div>
 
-      <div className="p-4 border-t border-dim bg-surface relative z-20 tech-border shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.8)]">
-        <form onSubmit={handleSubmit} className="glass-panel tech-border max-w-4xl mx-auto flex flex-col group focus-within:border-accent transition-colors">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={isLoading ? 'WAITING FOR OP...' : 'ENTER QUERY...'}
-            disabled={isLoading}
-            rows={1}
-            className="flex-1 resize-none bg-transparent outline-none p-4 text-primary placeholder-text-muted font-mono leading-relaxed"
-            style={{ minHeight: '60px', maxHeight: '200px' }}
-          />
-          <div className="flex justify-between items-center p-2 border-t border-dim/50 bg-black/20">
-            <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-dim px-2">
-               <span>[Shift+Enter] newLine</span>
-               <div className="w-1 h-1 bg-dim"></div>
-               <span className={input.length > 0 ? "text-accent transition-colors block md:inline" : "hidden md:inline"}>
-                 Len: {input.length}
-               </span>
-            </div>
-            
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className={`px-6 py-2 text-[10px] uppercase font-bold tracking-widest tech-border transition-all flex items-center gap-2 ${
-                input.trim() && !isLoading
-                  ? 'bg-accent/10 text-accent border-accent hover:bg-accent hover:text-black shadow-[0_0_15px_var(--accent-muted)]'
-                  : 'bg-transparent text-dim border-dim cursor-not-allowed'
-              }`}
+      {/* Quick doubt buttons */}
+      {lessonPlan?.suggestive_doubts && lessonPlan.suggestive_doubts.length > 0 && messages.length <= 2 && !isLoading && (
+        <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+          {lessonPlan.suggestive_doubts.slice(0, 3).map((doubt, i) => (
+            <button key={i} onClick={() => handleQuickDoubt(doubt)}
+              className="shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors hover:border-[var(--accent)]"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
             >
-              Execute
-              <div className={`w-1.5 h-1.5 rounded-none ${input.trim() && !isLoading ? 'bg-accent group-hover:bg-black animate-pulse' : 'bg-dim'}`}></div>
+              {doubt}
             </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input area */}
+      <div className="px-4 py-3 border-t" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto flex items-end gap-2">
+          <div className="flex-1 rounded-xl border overflow-hidden transition-colors focus-within:border-[var(--accent)]" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={isLoading ? 'Waiting for response...' : 'Ask a question or share your thoughts...'}
+              disabled={isLoading}
+              rows={1}
+              className="w-full resize-none bg-transparent outline-none px-4 py-3 text-sm leading-relaxed"
+              style={{ color: 'var(--text-primary)', minHeight: '44px', maxHeight: '160px' }}
+            />
           </div>
+          <button
+            type="submit"
+            disabled={!input.trim() || isLoading}
+            className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all"
+            style={{
+              background: input.trim() && !isLoading ? 'var(--accent)' : 'var(--bg-muted)',
+              color: input.trim() && !isLoading ? '#fff' : 'var(--text-muted)',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" />
+            </svg>
+          </button>
         </form>
       </div>
 
+      {/* Scroll to bottom */}
       {showScrollBtn && (
-         <button
-         onClick={() => scrollToBottom()}
-         className="absolute bottom-28 left-1/2 -translate-x-1/2 px-4 py-2 text-[10px] uppercase tech-border glass-panel text-accent border-accent hover:bg-accent/10 transition-colors animate-fadeIn shadow-[0_0_20px_var(--bg-base)] z-30 tracking-widest font-mono"
-       >
-         [ Scroll To Present ]
-       </button>
+        <button onClick={() => scrollToBottom()}
+          className="absolute bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 text-xs font-medium rounded-full shadow-lg transition-colors animate-fadeIn z-30"
+          style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+        >
+          ↓ Jump to latest
+        </button>
       )}
     </div>
   );

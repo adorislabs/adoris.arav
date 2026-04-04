@@ -10,35 +10,53 @@ import { loadSession } from '@/lib/session/sessionStore';
 import type { Exam, ExamQuestion, ExamSection } from '@/lib/llm/examGenerator';
 
 type AnswerState = Record<number, { selected?: number; text?: string; answered: boolean }>;
+type PastAttempt = { id: string; student_name: string; score: number; total_marks: number; attempt_number: number; time_taken_seconds: number; created_at: string };
 
 export default function ExamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
   const [fileName, setFileName] = useState<string | null>(null);
   const [exam, setExam] = useState<Exam | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
   const [activeQ, setActiveQ] = useState(0);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [showAnswerKey, setShowAnswerKey] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(60 * 60); // 60 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(60 * 60);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeRef = useRef<number>(0);
 
-  // ─── Fetch Filename ───────────────────────────────────────────────────
+  // Pre-exam state
+  const [phase, setPhase] = useState<'setup' | 'exam'>('setup');
+  const [studentName, setStudentName] = useState('');
+  const [pastAttempts, setPastAttempts] = useState<PastAttempt[]>([]);
+  const [loadingAttempts, setLoadingAttempts] = useState(true);
+
+  // ─── Fetch Filename + Past Attempts ────────────────────────────────────
   useEffect(() => {
-    async function fetchName() {
+    async function init() {
       try {
-        const res = await fetch(`/api/chapters/${id}/details`);
-        const data = await res.json();
-        if (data.success && data.fileName) setFileName(data.fileName);
-        else setFileName(atob(decodeURIComponent(id)));
+        const [detailsRes, attemptsRes] = await Promise.all([
+          fetch(`/api/chapters/${id}/details`),
+          fetch(`/api/exams/submit?chapterId=${id}`),
+        ]);
+        const detailsData = await detailsRes.json();
+        if (detailsData.success && detailsData.fileName) setFileName(detailsData.fileName);
+        else { try { setFileName(atob(decodeURIComponent(id))); } catch { setFileName('Unknown'); } }
+
+        const attemptsData = await attemptsRes.json();
+        if (attemptsData.success && attemptsData.attempts) {
+          setPastAttempts(attemptsData.attempts);
+        }
       } catch {
         try { setFileName(atob(decodeURIComponent(id))); } catch { setFileName('Unknown'); }
+      } finally {
+        setLoadingAttempts(false);
       }
     }
-    fetchName();
+    init();
   }, [id]);
 
   // ─── Fetch Exam ───────────────────────────────────────────────────────
@@ -46,20 +64,33 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     if (!fileName) return;
     setLoading(true);
     try {
-      const session = loadSession(id);
+      // Try cloud session first, fall back to localStorage
+      let chapterPlan = null;
+      let lessonPlans = {};
+      try {
+        const sessionRes = await fetch(`/api/pdfs/session?chapterId=${id}`);
+        const sessionData = await sessionRes.json();
+        if (sessionData.success && sessionData.session) {
+          chapterPlan = sessionData.session.chapterPlan || null;
+          lessonPlans = sessionData.session.lessonPlans || {};
+        }
+      } catch { /* ignore cloud fetch failure */ }
+      if (!chapterPlan) {
+        const local = loadSession(id);
+        chapterPlan = local?.chapterPlan || null;
+        lessonPlans = local?.lessonPlans || {};
+      }
+
       const res = await fetch('/api/pdfs/exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName,
-          chapterPlan: session?.chapterPlan || null,
-          lessonPlans: session?.lessonPlans || {},
-        }),
+        body: JSON.stringify({ fileName, chapterPlan, lessonPlans }),
       });
       const data = await res.json();
       if (data.success && data.exam) {
         setExam(data.exam);
         setTimeLeft((data.exam.time_limit_minutes || 60) * 60);
+        startTimeRef.current = Date.now();
       } else {
         throw new Error(data.error || 'Failed to generate');
       }
@@ -68,11 +99,11 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     } finally {
       setLoading(false);
     }
-  }, [fileName]);
+  }, [fileName, id]);
 
   useEffect(() => {
-    fetchExam();
-  }, [fetchExam]);
+    if (phase === 'exam') fetchExam();
+  }, [phase, fetchExam]);
 
   // ─── Countdown Timer ──────────────────────────────────────────────────
   useEffect(() => {
@@ -187,6 +218,35 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
 
   const calculateScore = () => scoreResult ?? { earned: 0, total: exam?.total_marks || 50, perSection: [] };
 
+  // ─── Submit & Save ────────────────────────────────────────────────────
+  const handleSubmitExam = useCallback(() => {
+    setSubmitted(true);
+    setShowAnswerKey(true);
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    // Save results to API
+    if (exam && scoreResult) {
+      const timeTaken = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      const sectionScores = scoreResult.perSection.reduce((acc, s) => {
+        acc[s.name] = { earned: s.earned, total: s.total };
+        return acc;
+      }, {} as Record<string, { earned: number; total: number }>);
+
+      fetch('/api/exams/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chapterId: id,
+          studentName: studentName || 'Student',
+          score: scoreResult.earned,
+          totalMarks: scoreResult.total,
+          timeTakenSeconds: timeTaken,
+          sectionScores,
+        }),
+      }).catch(() => { /* fire and forget */ });
+    }
+  }, [exam, scoreResult, id, studentName]);
+
   // ─── Keyboard navigation ──────────────────────────────────────────────
   useEffect(() => {
     if (!exam || submitted) return;
@@ -208,6 +268,82 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [exam, submitted]);
+
+  // ─── Setup Screen (name entry + past attempts) ────────────────────────
+  if (phase === 'setup') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-full p-6 sm:p-8" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-full max-w-md">
+          <div className="rounded-2xl border p-8" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-5" style={{ background: 'var(--accent-muted)' }}>
+              <span className="text-2xl">📝</span>
+            </div>
+            <h1 className="text-xl font-bold text-center mb-1" style={{ color: 'var(--text-primary)' }}>Chapter Exam</h1>
+            <p className="text-sm text-center mb-6" style={{ color: 'var(--text-secondary)' }}>
+              {fileName || 'Loading...'} — 60 marks, ~60 minutes
+            </p>
+
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Your Name</label>
+            <input
+              type="text"
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
+              placeholder="Enter your name"
+              className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-colors focus:border-[var(--accent)] mb-5"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              autoFocus
+            />
+
+            <button
+              onClick={() => { if (studentName.trim()) setPhase('exam'); }}
+              disabled={!studentName.trim() || !fileName}
+              className="w-full py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              Start Exam →
+            </button>
+          </div>
+
+          {/* Past Attempts */}
+          {loadingAttempts ? (
+            <div className="mt-6 text-center">
+              <div className="skeleton h-16 rounded-xl" />
+            </div>
+          ) : pastAttempts.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Previous Attempts</h3>
+              <div className="space-y-2">
+                {pastAttempts.map((a) => {
+                  const pct = Math.round((a.score / a.total_marks) * 100);
+                  const mins = Math.floor(a.time_taken_seconds / 60);
+                  return (
+                    <div key={a.id} className="rounded-xl border p-4 flex items-center justify-between" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{a.student_name} — Attempt #{a.attempt_number}</p>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {new Date(a.created_at).toLocaleDateString()} · {mins}min
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold" style={{ color: pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--error)' }}>
+                          {a.score}/{a.total_marks}
+                        </p>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{pct}%</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <Link href="/dashboard" className="block text-center text-sm mt-5" style={{ color: 'var(--text-muted)' }}>
+            ← Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Loading ──────────────────────────────────────────────────────────
   if (loading) {
@@ -238,7 +374,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
           <button
             onClick={fetchExam}
             className="px-6 py-2.5 text-white rounded-xl font-semibold transition-all shadow-sm"
-            style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+            style={{ background: 'var(--accent)', color: '#fff' }}
           >
             Retry Generation
           </button>
@@ -307,7 +443,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
                   </div>
                   <div className="rounded-lg p-4 border" style={{ background: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.2)' }}>
                     <p className="text-xs font-semibold mb-1" style={{ color: 'var(--success)' }}>Answer Key:</p>
-                    <div className="prose prose-sm max-w-none" style={{ color: '#86efac' }}>
+                    <div className="prose prose-sm max-w-none" style={{ color: 'var(--success)' }}>
                       <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.answer_key}</ReactMarkdown>
                     </div>
                     <p className="text-xs mt-2 italic" style={{ color: 'rgba(34,197,94,0.6)' }}>Marking: {q.marking_scheme}</p>
@@ -317,7 +453,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
             </div>
           ))}
 
-          <Link href="/dashboard" className="block w-full py-3 rounded-xl font-semibold transition-colors text-center mt-4 mb-8" style={{ background: 'var(--accent)', color: '#0c0c0e' }}>
+          <Link href="/dashboard" className="block w-full py-3 rounded-xl font-semibold transition-colors text-center mt-4 mb-8" style={{ background: 'var(--accent)', color: '#fff' }}>
             Return to Dashboard
           </Link>
         </div>
@@ -336,7 +472,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
       {/* Mobile Nav Overlay */}
       {showMobileNav && (
         <div className="md:hidden fixed inset-0 z-50 flex" onClick={() => setShowMobileNav(false)}>
-          <div className="absolute inset-0" style={{ background: 'rgba(12,12,14,0.7)' }} />
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)' }} />
           <div className="relative w-72 flex flex-col border-r overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }} onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
               <div>
@@ -361,7 +497,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
                         return (
                           <button key={qIdx} onClick={() => { goToQuestion(sIdx, qIdx); setShowMobileNav(false); }}
                             className={`w-8 h-8 rounded-md text-xs font-bold transition-all`}
-                            style={isActive ? { background: 'var(--accent)', color: '#0c0c0e' } : isAnswered ? { background: 'rgba(34,197,94,0.15)', color: '#86efac', border: '1px solid rgba(34,197,94,0.3)' } : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }}
+                            style={isActive ? { background: 'var(--accent)', color: '#fff' } : isAnswered ? { background: 'rgba(34,197,94,0.15)', color: 'var(--success)', border: '1px solid rgba(34,197,94,0.3)' } : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }}
                           >{q.question_number}</button>
                         );
                       })}
@@ -371,7 +507,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
               })}
             </div>
             <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
-              <button onClick={() => { setSubmitted(true); setShowAnswerKey(true); if (timerRef.current) clearInterval(timerRef.current); }} className="w-full py-2.5 rounded-lg font-semibold text-sm" style={{ background: 'var(--error)', color: '#fff' }}>Submit Exam</button>
+              <button onClick={() => handleSubmitExam()} className="w-full py-2.5 rounded-lg font-semibold text-sm" style={{ background: 'var(--error)', color: '#fff' }}>Submit Exam</button>
             </div>
           </div>
         </div>
@@ -419,9 +555,9 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
                         }`}
                         style={
                           isActive
-                            ? { background: 'var(--accent)', color: '#0c0c0e', boxShadow: '0 0 0 2px rgba(240,165,0,0.3)' }
+                            ? { background: 'var(--accent)', color: '#fff', boxShadow: '0 0 0 2px rgba(240,165,0,0.3)' }
                             : isAnswered
-                              ? { background: 'rgba(34,197,94,0.15)', color: '#86efac', borderColor: 'rgba(34,197,94,0.3)' }
+                              ? { background: 'rgba(34,197,94,0.15)', color: 'var(--success)', borderColor: 'rgba(34,197,94,0.3)' }
                               : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }
                         }
                       >
@@ -438,7 +574,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
         {/* Submit Button */}
         <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
           <button
-            onClick={() => { setSubmitted(true); setShowAnswerKey(true); if (timerRef.current) clearInterval(timerRef.current); }}
+            onClick={() => handleSubmitExam()}
             className="w-full py-2.5 text-white rounded-lg font-semibold transition-colors text-sm"
             style={{ background: 'var(--error)' }}
           >
@@ -550,7 +686,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
               </button>
               {isLastQ ? (
                 <button
-                  onClick={() => { setSubmitted(true); setShowAnswerKey(true); if (timerRef.current) clearInterval(timerRef.current); }}
+                  onClick={() => handleSubmitExam()}
                   className="px-6 py-2.5 text-white rounded-xl font-medium transition-colors"
                   style={{ background: 'var(--error)' }}
                 >
@@ -560,7 +696,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
                 <button
                   onClick={goNext}
                   className="px-6 py-2.5 rounded-xl font-medium transition-colors"
-                  style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+                  style={{ background: 'var(--accent)', color: '#fff' }}
                 >
                   Next →
                 </button>

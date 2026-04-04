@@ -56,19 +56,25 @@ const TOPIC_DIFF_META: Record<string, { label: string; dot: string }> = {
   advanced:     { label: 'Advanced',     dot: 'bg-red-400'     },
 };
 
-// ─── Problem card component ───────────────────────────────────────────────
+// ─── Problem card component with progressive hints ─────────────────────
 function ProblemCard({
   prob,
   index,
-  expanded,
-  onToggle,
+  hintLevel,
+  onAdvanceHint,
 }: {
   prob: Problem;
   index: number;
-  expanded: boolean;
-  onToggle: () => void;
+  hintLevel: number; // 0=hidden, 1=hint, 2=answer, 3=full solution
+  onAdvanceHint: () => void;
 }) {
-  const meta = DIFF_META[prob.difficulty] ?? { label: prob.difficulty, badge: 'bg-slate-800 text-slate-400 border-slate-700' };
+  const meta = DIFF_META[prob.difficulty] ?? { label: prob.difficulty, badge: 'bg-slate-200 text-slate-600 border-slate-300' };
+
+  // Extract first step of solution as hint
+  const solutionLines = prob.solution_steps?.split('\n').filter(l => l.trim()) || [];
+  const hintText = solutionLines.length > 0 ? solutionLines[0] : 'Think about the core concept involved.';
+
+  const hintLabels = ['Show hint', 'Show answer', 'Show full solution', ''];
 
   return (
     <div
@@ -87,7 +93,7 @@ function ProblemCard({
           <span className={`text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border ${meta.badge}`}>
             {meta.label}
           </span>
-          <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-900/40 text-indigo-400 border border-indigo-800/40">
+          <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}>
             {prob.marks}m
           </span>
         </div>
@@ -113,39 +119,51 @@ function ProblemCard({
           </div>
         )}
 
-        {/* Answer toggle */}
-        <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
-          <button
-            onClick={onToggle}
-            className="flex items-center gap-2 text-xs font-semibold transition-colors w-full"
-            style={{ color: expanded ? 'var(--success)' : 'var(--accent)' }}
-          >
-            <svg
-              className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            {expanded ? 'Hide solution' : 'Show answer & solution'}
-            {prob.options && prob.correct_index !== undefined && expanded && (
-              <span className="ml-auto font-bold" style={{ color: 'var(--success)' }}>
-                Answer: {String.fromCharCode(65 + prob.correct_index)}
-              </span>
-            )}
-          </button>
+        {/* Progressive hint section */}
+        <div className="border-t pt-4 space-y-3" style={{ borderColor: 'var(--border)' }}>
+          
+          {/* Hint level 1: conceptual nudge */}
+          {hintLevel >= 1 && (
+            <div className="hint-card rounded-xl p-4" style={{ background: 'rgba(45,106,79,0.06)', border: '1px solid rgba(45,106,79,0.15)' }}>
+              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--accent)' }}>💡 Hint</p>
+              <div className="adoris-prose text-sm" style={{ color: 'var(--text-secondary)' }}>
+                <MemoMd content={hintText} />
+              </div>
+            </div>
+          )}
 
-          {expanded && (
-            <div
-              className="mt-3 p-4 rounded-xl space-y-2"
-              style={{ background: 'var(--bg-muted)' }}
-            >
-              <p className="text-sm font-semibold" style={{ color: 'var(--success)' }}>
-                {prob.answer}
+          {/* Hint level 2: answer */}
+          {hintLevel >= 2 && (
+            <div className="hint-card rounded-xl p-4" style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)' }}>
+              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--success)' }}>
+                Answer{prob.options && prob.correct_index !== undefined && ` — ${String.fromCharCode(65 + prob.correct_index)}`}
               </p>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{prob.answer}</p>
+            </div>
+          )}
+
+          {/* Hint level 3: full solution */}
+          {hintLevel >= 3 && (
+            <div className="rounded-xl p-4" style={{ background: 'var(--bg-muted)' }}>
+              <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Full Solution</p>
               <div className="adoris-prose text-sm" style={{ color: 'var(--text-secondary)' }}>
                 <MemoMd content={prob.solution_steps} />
               </div>
             </div>
+          )}
+
+          {/* Advance button */}
+          {hintLevel < 3 && (
+            <button
+              onClick={onAdvanceHint}
+              className="flex items-center gap-2 text-xs font-semibold transition-colors"
+              style={{ color: 'var(--accent)' }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              {hintLabels[hintLevel]}
+            </button>
           )}
         </div>
       </div>
@@ -164,11 +182,13 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
   const [loadingTopics, setLoadingTopics] = useState(true);
   const [loadingProblems, setLoadingProblems] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedSolutions, setExpandedSolutions] = useState<Record<string, boolean>>({});
+  const [hintLevels, setHintLevels] = useState<Record<string, number>>({});
   const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>('all');
   const [existingSets, setExistingSets] = useState<ProblemSetData[]>([]);
   const [completedTopics, setCompletedTopics] = useState<Set<string>>(new Set());
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [focusMode, setFocusMode] = useState(true); // one-at-a-time by default
+  const [focusIndex, setFocusIndex] = useState(0);
 
   // ─── Fetch filename ──────────────────────────────────────────────────
   useEffect(() => {
@@ -280,8 +300,9 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
     if (loadingProblems) return;
     setSelectedTopic(topic);
     setError(null);
-    setExpandedSolutions({});
+    setHintLevels({});
     setDifficultyFilter('all');
+    setFocusIndex(0);
 
     // Check cache — match on topic label or source_topics
     const cached = existingSets.find(s =>
@@ -330,8 +351,8 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
     [problems, difficultyFilter]
   );
 
-  const toggleSolution = useCallback((pid: string) => {
-    setExpandedSolutions(prev => ({ ...prev, [pid]: !prev[pid] }));
+  const advanceHint = useCallback((pid: string) => {
+    setHintLevels(prev => ({ ...prev, [pid]: Math.min((prev[pid] || 0) + 1, 3) }));
   }, []);
 
   // ─── Loading state ────────────────────────────────────────────────────
@@ -357,7 +378,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
       {/* Mobile Sidebar Overlay */}
       {showMobileSidebar && (
         <div className="md:hidden fixed inset-0 z-50 flex" onClick={() => setShowMobileSidebar(false)}>
-          <div className="absolute inset-0" style={{ background: 'rgba(12,12,14,0.7)' }} />
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)' }} />
           <div className="relative flex flex-col border-r overflow-hidden w-80 max-w-[85vw]" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }} onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Topics</h2>
@@ -387,7 +408,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
                     style={isSelected ? { background: 'rgba(240,165,0,0.12)', outline: '1px solid var(--accent)' } : { background: 'transparent' }}
                   >
                     <div className="flex items-start gap-2.5">
-                      <span className="shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold mt-0.5" style={isSelected ? { background: 'var(--accent)', color: '#0c0c0e' } : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>{isDone ? '✓' : idx + 1}</span>
+                      <span className="shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold mt-0.5" style={isSelected ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>{isDone ? '✓' : idx + 1}</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium leading-tight" style={{ color: isSelected ? 'var(--accent)' : isDone ? 'var(--text-secondary)' : 'var(--text-primary)' }}>{topic.label}</div>
                         <div className="flex items-center gap-1.5 mt-1.5">
@@ -402,7 +423,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
               })}
             </div>
             <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
-              <Link href={`/dashboard/exam/${id}`} className="block w-full py-2.5 text-center text-xs font-semibold rounded-xl" style={{ background: 'var(--accent)', color: '#0c0c0e' }}>Full Exam</Link>
+              <Link href={`/dashboard/exam/${id}`} className="block w-full py-2.5 text-center text-xs font-semibold rounded-xl" style={{ background: 'var(--accent)', color: '#fff' }}>Full Exam</Link>
             </div>
           </div>
         </div>
@@ -469,7 +490,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
               <button
                 onClick={() => loadTopics(true)}
                 className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
-                style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+                style={{ background: 'var(--accent)', color: '#fff' }}
               >
                 Re-analyse Chapter
               </button>
@@ -496,7 +517,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
                     <span
                       className="shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold mt-0.5"
                       style={isSelected
-                        ? { background: 'var(--accent)', color: '#0c0c0e' }
+                        ? { background: 'var(--accent)', color: '#fff' }
                         : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }
                       }
                     >
@@ -533,7 +554,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
             <Link
               href={`/dashboard/exam/${id}`}
               className="flex-1 py-2.5 text-center text-xs font-semibold rounded-xl transition-colors"
-              style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+              style={{ background: 'var(--accent)', color: '#fff' }}
             >
               Full Exam
             </Link>
@@ -575,7 +596,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
         <div className="flex-1 overflow-y-auto">
         {/* Error banner */}
         {error && (
-          <div className="m-6 p-4 rounded-xl border flex items-start gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)', color: '#fca5a5' }}>
+          <div className="m-6 p-4 rounded-xl border flex items-start gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)', color: 'var(--error)' }}>
             <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
             <p className="text-sm">{error}</p>
           </div>
@@ -637,44 +658,104 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
               </div>
             </div>
 
-            {/* Difficulty filter */}
-            <div className="mb-5 flex items-center gap-2 flex-wrap">
-              {([
-                { key: 'all',        label: 'All',         count: problems.length },
-                { key: 'foundation', label: 'Foundation',  count: problems.filter(p => p.difficulty === 'foundation').length },
-                { key: 'easy',       label: 'Easy',        count: problems.filter(p => p.difficulty === 'easy').length },
-                { key: 'medium',     label: 'Medium',      count: problems.filter(p => p.difficulty === 'medium').length },
-                { key: 'hard',       label: 'Hard',        count: problems.filter(p => p.difficulty === 'hard').length },
-                { key: 'exam_level', label: 'Exam',        count: problems.filter(p => p.difficulty === 'exam_level').length },
-              ] as { key: DifficultyFilter; label: string; count: number }[])
-                .filter(f => f.key === 'all' || f.count > 0)
-                .map(({ key, label, count }) => (
-                  <button
-                    key={key}
-                    onClick={() => setDifficultyFilter(key)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-full border transition-all"
-                    style={difficultyFilter === key
-                      ? { background: 'var(--accent)', color: '#0c0c0e', borderColor: 'var(--accent)' }
-                      : { background: 'var(--bg-elevated)', color: 'var(--text-muted)', borderColor: 'var(--border)' }
-                    }
-                  >
-                    {label} · {count}
-                  </button>
-                ))}
+            {/* Focus mode toggle */}
+            <div className="mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
+                {([
+                  { key: 'all',        label: 'All',         count: problems.length },
+                  { key: 'foundation', label: 'Foundation',  count: problems.filter(p => p.difficulty === 'foundation').length },
+                  { key: 'easy',       label: 'Easy',        count: problems.filter(p => p.difficulty === 'easy').length },
+                  { key: 'medium',     label: 'Medium',      count: problems.filter(p => p.difficulty === 'medium').length },
+                  { key: 'hard',       label: 'Hard',        count: problems.filter(p => p.difficulty === 'hard').length },
+                  { key: 'exam_level', label: 'Exam',        count: problems.filter(p => p.difficulty === 'exam_level').length },
+                ] as { key: DifficultyFilter; label: string; count: number }[])
+                  .filter(f => f.key === 'all' || f.count > 0)
+                  .map(({ key, label, count }) => (
+                    <button
+                      key={key}
+                      onClick={() => { setDifficultyFilter(key); setFocusIndex(0); }}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full border transition-all"
+                      style={difficultyFilter === key
+                        ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
+                        : { background: 'var(--bg-elevated)', color: 'var(--text-muted)', borderColor: 'var(--border)' }
+                      }
+                    >
+                      {label} · {count}
+                    </button>
+                  ))}
+              </div>
+              <button
+                onClick={() => setFocusMode(f => !f)}
+                className="text-xs font-medium px-3 py-1.5 rounded-full border transition-all shrink-0 ml-2"
+                style={{
+                  background: focusMode ? 'var(--accent-muted)' : 'var(--bg-elevated)',
+                  color: focusMode ? 'var(--accent)' : 'var(--text-muted)',
+                  borderColor: focusMode ? 'var(--accent)' : 'var(--border)',
+                }}
+              >
+                {focusMode ? '🎯 Focus' : '📋 All'}
+              </button>
             </div>
 
             {/* Problem cards */}
-            <div className="space-y-4">
-              {filteredProblems.map((prob, idx) => (
-                <ProblemCard
-                  key={prob.id || idx}
-                  prob={prob}
-                  index={idx}
-                  expanded={!!expandedSolutions[prob.id || String(idx)]}
-                  onToggle={() => toggleSolution(prob.id || String(idx))}
-                />
-              ))}
-            </div>
+            {focusMode ? (
+              /* Focus mode: one at a time */
+              <div>
+                {filteredProblems[focusIndex] && (
+                  <>
+                    <div className="mb-3 text-xs font-medium text-center" style={{ color: 'var(--text-muted)' }}>
+                      Problem {focusIndex + 1} of {filteredProblems.length}
+                    </div>
+                    <ProblemCard
+                      key={filteredProblems[focusIndex].id || focusIndex}
+                      prob={filteredProblems[focusIndex]}
+                      index={focusIndex}
+                      hintLevel={hintLevels[filteredProblems[focusIndex].id || String(focusIndex)] || 0}
+                      onAdvanceHint={() => advanceHint(filteredProblems[focusIndex].id || String(focusIndex))}
+                    />
+                    <div className="flex justify-between items-center mt-4">
+                      <button
+                        onClick={() => setFocusIndex(i => Math.max(0, i - 1))}
+                        disabled={focusIndex === 0}
+                        className="px-5 py-2.5 text-sm font-medium disabled:opacity-30 transition-colors"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        ← Previous
+                      </button>
+                      <div className="flex gap-1">
+                        {filteredProblems.map((_, i) => (
+                          <button key={i} onClick={() => setFocusIndex(i)}
+                            className="w-2 h-2 rounded-full transition-all"
+                            style={{ background: i === focusIndex ? 'var(--accent)' : 'var(--bg-muted)' }}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setFocusIndex(i => Math.min(filteredProblems.length - 1, i + 1))}
+                        disabled={focusIndex >= filteredProblems.length - 1}
+                        className="px-5 py-2.5 text-sm font-medium rounded-xl disabled:opacity-30 transition-colors"
+                        style={{ background: 'var(--accent)', color: '#fff' }}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              /* All mode: show all problems */
+              <div className="space-y-4">
+                {filteredProblems.map((prob, idx) => (
+                  <ProblemCard
+                    key={prob.id || idx}
+                    prob={prob}
+                    index={idx}
+                    hintLevel={hintLevels[prob.id || String(idx)] || 0}
+                    onAdvanceHint={() => advanceHint(prob.id || String(idx))}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Footer: next topic CTA */}
             {filteredProblems.length === problems.length && (
@@ -691,7 +772,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
                       <button
                         onClick={() => handleSelectTopic(next)}
                         className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                        style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+                        style={{ background: 'var(--accent)', color: '#fff' }}
                       >
                         Next Topic →
                       </button>
@@ -704,7 +785,7 @@ export default function ProblemsPage({ params }: { params: Promise<{ id: string 
                       <Link
                         href={`/dashboard/exam/${id}`}
                         className="inline-block px-6 py-3 rounded-xl text-sm font-semibold"
-                        style={{ background: 'var(--accent)', color: '#0c0c0e' }}
+                        style={{ background: 'var(--accent)', color: '#fff' }}
                       >
                         Take Full Exam
                       </Link>

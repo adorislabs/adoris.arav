@@ -1,0 +1,75 @@
+Hey so I had made this project a while back, I am using it right now and it is kinda slow. I am unaware of the schema/db was architected. Use the supabase mcp to know what ever you need to know, you may delete unused files (but not the ones that I sent screenshot of), I would really like improving the latency of sessions opening/practice problems being made. I want you to debug reasons if you couldn't improve and let me know the reasons atleast
+
+Clicking "Show answer & solution" is a binary interaction. An AI-first platform should offer "Hints," "Simplified Versions," or "Visual Scaffolding" before just dumping the answer. This design encourages "guess and check" rather than deep comprehension.
+
+And dumping all qns at once face first is not how it should be, rather he should be able to focus at one qn with all the feats i mentioned at his disposal.
+
+Please also implement full fledged unit tests for the whole codebase, run it everytime you make changes and ensure the backend and frontend both run without errors.
+
+The screenshot attached shows the files I want to not be deleted from supabase. I would really appreciate if you can enhance the sessions/library experience as rn they cant really be edited and are not so feature rich. Also the exam dont seem to load and throw error. 
+
+Please debug and look into that. And allow multiple attempts over exams-- asking to enter your name at start and storing all the attempts, complete the exam experience as well so that it can be given to students. Similarly complete the practice problems experience. Rn they cant really practice it, its more of just reading the problems. Do one thing, make 2 sets of each topic, where once you complete doing example problems (meant to be read and understood)-- you have to complete the practice set of that specific topic as well. And this is also scored and stored. 
+
+The initial user landing with the password box is okay but can be overhauled and made much smoother. Currently even after entering password it takes ages for the website to start. You may check if we have to remove/add smthg in supabase for us to have the password auth setup instead of a user idp setup anywhere.
+
+Note using frontend-design skill whenever doing any frontend work. Everything is a gray box on a black background. There is no visual "reward" for progress or "friction" for errors. It feels clinical and uninspiring.
+The Issue: The UI is very dark, high-contrast, and "techy" (Zen/Adoris branding).
+
+The Critique: This looks like a coding IDE, not a learning space. For long study sessions, this can be visually fatiguing. The small, thin fonts and technical headers ("STATUS: LOCKED", "MODE: ACTIVE TUTOR") feel like a debug menu.
+
+The Fix: UI for Flow. Use a "Reader Mode" aesthetic—softer grays, larger line heights, and clear, bold typography. The "Status" and "Target" should be visual progress bars, not text labels.
+
+The [ SYSTEM.PAGE 1.INITIALIZED ] and ENTER QUERY... labels are "tech-bro" aesthetics that serve no pedagogical purpose.
+
+And are we mapping what topics he struggles or gets problem on, just have a simple way of tracking that on a sub url that anyone can access but dont keep any direct reference on the webapp for it.
+
+Wherever deemed necessary to help out the student, use SVG code inline, mermaid.js or html/css transition cards. Figure this out to be in the chat itself and aids in pedagogy without interrupting current flow. Ensure no MANIM references left anywhere in the codebase or llm.
+
+
+For Math, focusing on each page is a good starting point, but it's not the "Correct" way if you want to build a truly smart tutor.
+
+a strict "Page 1, then Page 2" rule might actually hurt user's learning.
+The Problem with "Page-by-Page"
+
+In a Math textbook, a single concept often spans half a page (like the introduction to "Lakh" on Page 1) or three pages (like a long exercise).
+
+    Arbitrary Breaks: A page might end right in the middle of an example. If the AI stops there and asks a "Why" question, the student hasn't seen the final answer yet.
+
+    Exercise Bloat: Page 13 of your PDF is just a list of word problems (Albatross and Godwit flight distances). If you treat this as one "page," the AI might try to teach all 14 problems at once, which is overwhelming.
+
+The Better Way: "Logical Unit" (Topic) Parsing
+
+Instead of "Page-by-Page," you should be doing "Topic-by-Topic" parsing. Here is how you restructure your PDF processing:
+1. Group by Headings, not Page Numbers
+
+Looking at your PDF, the natural breaks are:
+
+    Section 1.1: "A Lakh Varieties!" (Conceptual Intro)
+
+    Section 1.2: "How much is one lakh?" (Pattern/Number sense)
+
+    Section 1.3: "Place Value" (Technical skill)
+
+Your Logic: Tell the LLM to read the entire PDF, but break it into Logical Units.
+2. The "Sub-Topic" Gate
+
+Instead of a "Next Page" button, use a "Next Concept" button.
+
+    Unit 1: Understanding the scale of 100,000.
+
+    Unit 2: Writing numbers in Indian vs. International systems.
+
+    Unit 3: Practical word problems.
+
+3. Handling Exercises (The "Skill Check")
+
+When the PDF reaches a section like "Figure it Out" (found on Page 3), the AI should switch modes. It shouldn't "teach" Page 3; it should curate it.
+
+    Current way: AI asks about everything on Page 3.
+
+    Better way: AI picks one problem from the "Figure it Out" section to test the student. If he gets it right, he skips the rest of the page. If he gets it wrong, the AI gives him a second problem from the same page.
+
+Ensure page numbers based on the pdf are mentioned in response when REQUIRED only.
+Note you dont have to necessarily follow how I told abt the "better way of parsing". But I do want you to solve the page-by-page AI learning so that it is better. 
+
+Write a prompt md file for an agent that would audit the whole codebase for bugs/mismatched logic and implementation/feats malfxn/security issues (ones unaware eg. exclude login password auth it is intentional)

@@ -18,7 +18,7 @@ export interface LessonPlan {
   latex_questions: string[];
   application_problem?: string;
   prerequisite_concepts?: string[];
-  manim_visual_ideas: string;
+  visual_aids?: string;
   suggestive_doubts: string[];
 }
 
