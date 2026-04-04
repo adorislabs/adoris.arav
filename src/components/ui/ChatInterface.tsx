@@ -256,23 +256,18 @@ export function ChatInterface({
                 {isPageUnlocked ? "UNLOCKED" : "LOCKED"}
               </span>
             </div>
-            {lessonPlan.topic_importance && (
+            {pagePlanEntry?.estimated_difficulty && (
               <div className="flex items-center gap-1 border border-dim px-2 py-1">
-                <span className="text-dim">Priority:</span> 
-                <span className="text-accent">{lessonPlan.topic_importance}</span>
+                <span className="text-dim">Difficulty:</span>
+                <span className="text-accent uppercase">{pagePlanEntry.estimated_difficulty}</span>
               </div>
             )}
-            {lessonPlan.learning_objectives?.map((obj, i) => {
-              const isChecked = topicsChecked[i] || isPageUnlocked;
-              return (
-                <div key={i} className="flex items-center gap-2 border border-dim px-2 py-1 bg-elevated">
-                  <span className={isChecked ? "text-success" : "text-dim"}>
-                     {isChecked ? "[X]" : "[ ]"}
-                  </span>
-                  <span className={isChecked ? "text-success" : "text-text-primary"}>{obj}</span>
-                </div>
-              );
-            })}
+            {lessonPlan.suggestive_doubts?.slice(0, 2).map((doubt, i) => (
+              <div key={i} className="flex items-center gap-2 border border-dim px-2 py-1 bg-elevated">
+                <span className="text-dim">[?]</span>
+                <span className="text-text-primary">{doubt}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
