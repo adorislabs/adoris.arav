@@ -2,38 +2,38 @@
 @import "tailwindcss";
 
 :root {
-  /* Warm Reader Mode — soft, inviting learning space */
-  --bg-base:     #F7F5F0;   /* Warm cream paper */
-  --bg-surface:  #FFFFFF;   /* Clean white cards */
-  --bg-elevated: #F0EDE6;   /* Warm off-white for inputs/hover */
-  --bg-muted:    #E8E4DB;   /* Subtle warm gray fills */
+  /* Dark Mode — comfortable for long study sessions */
+  --bg-base:     #0c0c0e;   /* Near-black background */
+  --bg-surface:  #141416;   /* Card surface */
+  --bg-elevated: #1c1c1f;   /* Inputs, hover states */
+  --bg-muted:    #242428;   /* Subtle fills */
 
   /* Borders */
-  --border:      #DDD8CE;
-  --border-soft: #EBE7DF;
+  --border:      #2a2a2e;
+  --border-soft: #222226;
 
-  /* Text - Rich, readable tones */
-  --text-primary:   #2C2A25;
-  --text-secondary: #6B6760;
-  --text-muted:     #9B9690;
+  /* Text */
+  --text-primary:   #e8e6e1;
+  --text-secondary: #8a8884;
+  --text-muted:     #5a5856;
 
-  /* Accent - Deep forest green (trustworthy, academic) */
-  --accent:         #2D6A4F;
-  --accent-muted:   rgba(45, 106, 79, 0.10);
-  --accent-hover:   #40916C;
-  --accent-light:   #D8F3DC;
+  /* Accent - Soft sage green (easy on dark backgrounds) */
+  --accent:         #4ade80;
+  --accent-muted:   rgba(74, 222, 128, 0.12);
+  --accent-hover:   #86efac;
+  --accent-light:   rgba(74, 222, 128, 0.15);
 
   /* Status */
-  --success:  #40916C;
-  --error:    #C1453B;
-  --warning:  #CC8B2D;
+  --success:  #4ade80;
+  --error:    #f87171;
+  --warning:  #fbbf24;
 
   --font-sans: var(--font-inter), -apple-system, sans-serif;
   --font-serif: var(--font-lora), 'Georgia', serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { color-scheme: light; }
+html { color-scheme: dark; }
 
 body {
   margin: 0;

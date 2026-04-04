@@ -86,7 +86,7 @@ export default function PasskeyGate({ children }: { children: React.ReactNode })
       {/* Overlay */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center"
-        style={{ background: 'rgba(247,245,240,0.92)', backdropFilter: 'blur(20px)' }}
+        style={{ background: 'rgba(12,12,14,0.92)', backdropFilter: 'blur(20px)' }}
       >
         <div
           className="animate-slideUp w-full max-w-xs mx-6 rounded-2xl p-8 shadow-lg"
