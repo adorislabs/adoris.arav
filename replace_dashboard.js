@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+fs.writeFileSync('src/app/dashboard/layout.tsx', `
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
@@ -86,3 +88,5 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     </PasskeyGate>
   );
 }
+`);
+console.log('Saved dashboard layout - transformed to top-nav minimalist canvas');

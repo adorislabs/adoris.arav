@@ -1,3 +1,4 @@
+
 'use client';
 
 import { ReactNode, useState, useRef, useCallback, useEffect } from 'react';
@@ -7,8 +8,8 @@ interface SplitPaneProps {
   rightPane: ReactNode;
 }
 
-const MIN_PCT = 20;
-const MAX_PCT = 80;
+const MIN_PCT = 25;
+const MAX_PCT = 75;
 const DEFAULT_PCT = 50;
 
 export function SplitPane({ leftPane, rightPane }: SplitPaneProps) {
@@ -34,77 +35,56 @@ export function SplitPane({ leftPane, rightPane }: SplitPaneProps) {
     dragging.current = false;
   }, []);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
-
-      if (e.key === '[') { setLeftPct(p => Math.max(MIN_PCT, p - 5)); }
-      else if (e.key === ']') { setLeftPct(p => Math.min(MAX_PCT, p + 5)); }
-      else if (e.key === '\\') { setLeftPct(DEFAULT_PCT); }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
-
   return (
-    <div className="flex h-full w-full bg-base font-mono">
-      {/* Desktop: resizable side-by-side */}
+    <div className="flex h-full w-full bg-base font-sans">
       <div ref={containerRef} className="hidden md:flex h-full w-full">
+        
         <div
-          className="min-w-0 overflow-hidden border-r border-dim relative glass-panel tech-border"
+          className="min-w-0 overflow-hidden bg-surface relative transition-all duration-300"
           style={{ width: `${leftPct}%` }}
         >
-          <div className="absolute top-0 left-0 w-full h-1 bg-accent opacity-20"></div>
           {leftPane}
         </div>
 
-        {/* Resize handle */}
+        {/* Soft, invisible resize handle */}
         <div
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          className="shrink-0 w-2 cursor-col-resize group relative hover:w-3 transition-all z-10 flex flex-col justify-center items-center"
-          style={{ background: 'var(--bg-base)', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}
-          title="Drag to resize · [ ] keys · \ to reset"
+          className="shrink-0 w-4 -mx-2 cursor-col-resize group relative z-10 flex flex-col justify-center items-center"
+          title="Drag to resize"
         >
-          {/* Grip lines */}
-          <div className="flex gap-[2px] h-8 items-center px-[2px] opacity-30 group-hover:opacity-100 transition-opacity">
-            <div className="w-[1px] h-full bg-accent"></div>
-            <div className="w-[1px] h-full bg-accent"></div>
-          </div>
-          <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent" />
+          {/* Subtle line in the center */}
+          <div className="absolute inset-y-0 left-1/2 w-[1px] bg-dim opacity-40 group-hover:bg-accent group-hover:opacity-100 transition-all duration-300 transform -translate-x-1/2 rounded-full"></div>
         </div>
 
         <div
-          className="min-w-0 overflow-hidden flex flex-col flex-1 relative glass-panel tech-border"
-          style={{ background: 'var(--bg-surface)' }}
+          className="min-w-0 overflow-hidden flex flex-col flex-1 relative bg-surface border-l border-dim"
         >
-          <div className="absolute top-0 right-0 w-full h-1 bg-accent opacity-20"></div>
           {rightPane}
         </div>
       </div>
 
-      {/* Mobile: tabbed panes */}
-      <div className="flex md:hidden flex-col h-full w-full border-dim bg-base brutal-border">
-        <div className="flex shrink-0 border-b border-dim bg-surface" role="tablist">
-          <button
-            role="tab"
-            onClick={() => setActivePane('right')}
-            className={`flex-1 py-3 text-xs uppercase tracking-widest transition-all ${
-              activePane === 'right' ? 'text-accent border-b-2 border-accent bg-elevated' : 'text-dim hover:text-primary'
-            }`}
-          >
-            [ AI Tutor ]
-          </button>
+      {/* Mobile: soft tabbed panes */}
+      <div className="flex md:hidden flex-col h-full w-full bg-base">
+        <div className="mx-4 mt-4 flex shrink-0 p-1 rounded-xl bg-surface border border-dim" role="tablist">
           <button
             role="tab"
             onClick={() => setActivePane('left')}
-            className={`flex-1 py-3 text-xs uppercase tracking-widest transition-all border-l border-dim ${
-              activePane === 'left' ? 'text-accent border-b-2 border-accent bg-elevated' : 'text-dim hover:text-primary'
+            className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all duration-300 ${
+              activePane === 'left' ? 'bg-elevated text-primary shadow-sm' : 'text-dim hover:text-primary'
             }`}
           >
-            [ Document ]
+            Study Material
+          </button>
+          <button
+            role="tab"
+            onClick={() => setActivePane('right')}
+            className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all duration-300 ${
+              activePane === 'right' ? 'bg-elevated text-primary shadow-sm' : 'text-dim hover:text-primary'
+            }`}
+          >
+            Tutor Chat
           </button>
         </div>
         <div className="flex-1 overflow-hidden" role="tabpanel">

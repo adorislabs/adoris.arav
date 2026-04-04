@@ -1,21 +1,25 @@
+
 import type { Metadata } from "next";
-import { JetBrains_Mono, Cormorant_Garamond, Inter } from "next/font/google";
+import { Inter, Lora } from "next/font/google";
 import "./globals.css";
 
-const jetbrainsMono = JetBrains_Mono({ 
+const interFont = Inter({ 
   subsets: ["latin"], 
-  variable: "--font-jetbrains-mono" 
+  variable: "--font-inter",
+  display: "swap",
 });
 
-const cormorant = Cormorant_Garamond({ 
+const loraFont = Lora({ 
   weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
   subsets: ["latin"], 
-  variable: "--font-cormorant" 
+  variable: "--font-lora",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Active AI Tutor",
-  description: "The gatekeeper tutor that ensures mastery.",
+  title: "Adoris Tutor",
+  description: "A refined active reading environment.",
 };
 
 export default function RootLayout({
@@ -25,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${jetbrainsMono.variable} ${cormorant.variable} bg-base text-primary font-mono`}>
+      <body className={`${interFont.variable} ${loraFont.variable} bg-base text-primary font-sans`}>
         {children}
       </body>
     </html>
