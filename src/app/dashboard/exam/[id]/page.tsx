@@ -28,6 +28,16 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
 
+  // ─── Per-question timing ─────────────────────────────────────────────
+  // Maps globalIndex → cumulative seconds spent on that question
+  const questionTimingsRef = useRef<Record<number, number>>({});
+  // When the current question was entered (ms timestamp)
+  const questionEnteredAtRef = useRef<number>(0);
+
+  // ─── Tab / focus integrity tracking ──────────────────────────────────
+  const tabSwitchesRef = useRef<number>(0);
+  const tabSwitchLogRef = useRef<Array<{ left_at: number; returned_at?: number }>>([]);
+
   // Pre-exam state
   const [phase, setPhase] = useState<'setup' | 'exam'>('setup');
   const [studentName, setStudentName] = useState('');
@@ -64,27 +74,18 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     if (!fileName) return;
     setLoading(true);
     try {
-      // Try cloud session first, fall back to localStorage
-      let chapterPlan = null;
+      // Pass chapterId — server will read chapter_plan from DB and cache the result
+      // Still pass lessonPlans from local session for richer question generation
       let lessonPlans = {};
       try {
-        const sessionRes = await fetch(`/api/pdfs/session?chapterId=${id}`);
-        const sessionData = await sessionRes.json();
-        if (sessionData.success && sessionData.session) {
-          chapterPlan = sessionData.session.chapterPlan || null;
-          lessonPlans = sessionData.session.lessonPlans || {};
-        }
-      } catch { /* ignore cloud fetch failure */ }
-      if (!chapterPlan) {
         const local = loadSession(id);
-        chapterPlan = local?.chapterPlan || null;
         lessonPlans = local?.lessonPlans || {};
-      }
+      } catch { /* ignore */ }
 
       const res = await fetch('/api/pdfs/exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName, chapterPlan, lessonPlans }),
+        body: JSON.stringify({ fileName, chapterId: id, lessonPlans }),
       });
       const data = await res.json();
       if (data.success && data.exam) {
@@ -161,13 +162,45 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     }));
   };
 
+  // ─── Record time on current question before leaving it ─────────────
+  const recordQuestionTime = useCallback(() => {
+    if (questionEnteredAtRef.current === 0) return;
+    const elapsed = Math.floor((Date.now() - questionEnteredAtRef.current) / 1000);
+    questionTimingsRef.current[globalIndex] = (questionTimingsRef.current[globalIndex] || 0) + elapsed;
+    questionEnteredAtRef.current = Date.now();
+  }, [globalIndex]);
+
+  // Stamp entry time whenever the active question changes
+  useEffect(() => {
+    if (!exam || submitted) return;
+    questionEnteredAtRef.current = Date.now();
+  }, [globalIndex, exam, submitted]);
+
+  // ─── Tab visibility tracking ──────────────────────────────────────────
+  useEffect(() => {
+    if (!exam || submitted) return;
+    const onVisibility = () => {
+      if (document.hidden) {
+        tabSwitchesRef.current += 1;
+        tabSwitchLogRef.current.push({ left_at: Date.now() });
+      } else {
+        const last = tabSwitchLogRef.current[tabSwitchLogRef.current.length - 1];
+        if (last && !last.returned_at) last.returned_at = Date.now();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [exam, submitted]);
+
   // ─── Navigation ───────────────────────────────────────────────────────
   const goToQuestion = useCallback((sectionIdx: number, qIdx: number) => {
+    recordQuestionTime();
     setActiveSection(sectionIdx);
     setActiveQ(qIdx);
-  }, []);
+  }, [recordQuestionTime]);
 
   const goNext = () => {
+    recordQuestionTime();
     if (!currentSection) return;
     if (activeQ + 1 < currentSection.questions.length) {
       setActiveQ(activeQ + 1);
@@ -178,6 +211,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   };
 
   const goPrev = () => {
+    recordQuestionTime();
     if (activeQ > 0) {
       setActiveQ(activeQ - 1);
     } else if (activeSection > 0) {
@@ -220,14 +254,18 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
 
   // ─── Submit & Save ────────────────────────────────────────────────────
   const handleSubmitExam = useCallback(() => {
+    // Record time on the last active question before submitting
+    recordQuestionTime();
+
     setSubmitted(true);
     setShowAnswerKey(true);
     if (timerRef.current) clearInterval(timerRef.current);
 
     // Save results to API
-    if (exam && scoreResult) {
+    if (exam) {
       const timeTaken = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      const sectionScores = scoreResult.perSection.reduce((acc, s) => {
+      const result = scoreResult ?? { earned: 0, total: exam.total_marks || 50, perSection: [] };
+      const sectionScores = result.perSection.reduce((acc, s) => {
         acc[s.name] = { earned: s.earned, total: s.total };
         return acc;
       }, {} as Record<string, { earned: number; total: number }>);
@@ -238,14 +276,22 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
         body: JSON.stringify({
           chapterId: id,
           studentName: studentName || 'Student',
-          score: scoreResult.earned,
-          totalMarks: scoreResult.total,
-          timeTakenSeconds: timeTaken,
+          examData: exam,
+          answers,
+          score: result.earned,
+          totalMarks: result.total,
+          timeTaken,
           sectionScores,
+          questionTimings: questionTimingsRef.current,
+          tabSwitches: tabSwitchesRef.current,
+          integrityFlags: {
+            tab_switch_log: tabSwitchLogRef.current,
+            total_tab_switches: tabSwitchesRef.current,
+          },
         }),
       }).catch(() => { /* fire and forget */ });
     }
-  }, [exam, scoreResult, id, studentName]);
+  }, [exam, scoreResult, id, studentName, answers, recordQuestionTime]);
 
   // ─── Keyboard navigation ──────────────────────────────────────────────
   useEffect(() => {

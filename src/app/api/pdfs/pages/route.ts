@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getPdfBufferFromChapterId, getPdfPageCountFromBuffer } from '@/lib/pdf/supabase';
+import { createServiceClient } from '@/lib/supabase/service';
 
 export async function GET(req: Request) {
   try {
@@ -10,8 +11,31 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'chapterId required' }, { status: 400 });
     }
 
+    const supabase = createServiceClient();
+
+    // Fast path: page_count already stored in DB
+    const { data: chapter } = await supabase
+      .from('chapters')
+      .select('page_count')
+      .eq('id', chapterId)
+      .single();
+
+    if (chapter?.page_count && chapter.page_count > 0) {
+      return NextResponse.json({ success: true, totalPages: chapter.page_count });
+    }
+
+    // Slow path: download PDF, count pages, then cache result
     const buffer = await getPdfBufferFromChapterId(chapterId);
     const totalPages = await getPdfPageCountFromBuffer(buffer);
+
+    // Save for future requests (fire-and-forget)
+    supabase
+      .from('chapters')
+      .update({ page_count: totalPages })
+      .eq('id', chapterId)
+      .then(({ error }) => {
+        if (error) console.warn('[pages] Failed to cache page_count:', error.message);
+      });
 
     return NextResponse.json({ success: true, totalPages });
   } catch (error) {

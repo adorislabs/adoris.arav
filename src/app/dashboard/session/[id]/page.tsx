@@ -29,134 +29,102 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const syncAbortRef = useRef<AbortController | null>(null);
 
-  // ─── Phase 1: Fetch filename and check for existing session ───────────
+  // ─── Phase 1: Fire ALL init fetches in parallel from mount ────────────
   useEffect(() => {
     async function init() {
-      try {
-        // Fetch the real filename from Supabase chapter ID
-        const detRes = await fetch(`/api/chapters/${id}/details`);
-        const detData = await detRes.json();
-        if (!detData.success || !detData.fileName) {
-          console.error('Chapter not found');
-          // If it fails (e.g. they actually passed a base64 name manually), fallback to atob
-          try {
-            const fallbackName = atob(decodeURIComponent(id));
-            setFileName(fallbackName);
-          } catch { return; }
-        } else {
-          setFileName(detData.fileName);
-        }
-      } catch {
-        try { setFileName(atob(decodeURIComponent(id))); } catch { return; }
-      }
-    }
-    init();
-  }, [id]);
-
-  useEffect(() => {
-    if (!fileName) return;
-
-    async function initSession() {
-      // Fetch page count and cloud session in parallel
-      const [pagesResult, cloudResult] = await Promise.allSettled([
+      // Kick off all 3 requests simultaneously — no waterfall
+      const [detResult, pagesResult, cloudResult] = await Promise.allSettled([
+        fetch(`/api/chapters/${id}/details`).then(r => r.json()),
         fetch(`/api/pdfs/pages?chapterId=${id}`).then(r => r.json()),
         fetch(`/api/pdfs/session?chapterId=${id}`).then(r => r.json()),
       ]);
 
-      let pages = totalPages;
+      // ── Resolve fileName ──
+      let resolvedFileName: string | null = null;
+      if (detResult.status === 'fulfilled' && detResult.value.success && detResult.value.fileName) {
+        resolvedFileName = detResult.value.fileName;
+      } else {
+        try { resolvedFileName = atob(decodeURIComponent(id)); } catch { return; }
+      }
+      setFileName(resolvedFileName);
+
+      // ── Resolve page count ──
+      let pages = 1;
       if (pagesResult.status === 'fulfilled' && pagesResult.value.success) {
         pages = pagesResult.value.totalPages;
         setTotalPages(pages);
       }
 
+      // ── Resolve cloud session ──
       let cloudSession: SessionState | null = null;
       if (cloudResult.status === 'fulfilled' && cloudResult.value.success && cloudResult.value.session) {
         cloudSession = {
           ...cloudResult.value.session,
-          fileName: fileName!,
-          totalPages: pages || 1,
+          fileName: resolvedFileName!,
+          totalPages: pages,
           chapterPlan: null,
         };
       }
 
-      // 3. Fallback/Check localStorage
       const localSession = loadSession(id);
-      
       const sessionToUse = cloudSession || localSession;
 
       if (sessionToUse && !sessionToUse.quizCompleted) {
-        // If we have a session but it's missing the chapterPlan (common for cloud restore), fetch/generate it
+        // Restore chapter plan if missing (now cached in DB → fast DB read)
         if (!sessionToUse.chapterPlan) {
           try {
             const cpRes = await fetch('/api/pdfs/chapter-plan', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chapterId: id, fileName: fileName! }),
+              body: JSON.stringify({ chapterId: id, fileName: resolvedFileName }),
             });
             const cpData = await cpRes.json();
-            if (cpData.success) {
-              sessionToUse.chapterPlan = cpData.chapterPlan;
-            }
+            if (cpData.success) sessionToUse.chapterPlan = cpData.chapterPlan;
           } catch (err) {
             console.error('Failed to restore chapter plan:', err);
           }
         }
-
         setSession(sessionToUse);
         setPhase('resume_prompt');
       } else if (sessionToUse?.quizCompleted) {
-        // Quiz already completed — show completion state
         setSession(sessionToUse);
         setPhase('completed');
       } else {
-        // No session or quiz already completed — start fresh
         setPhase('generating_plan');
-        await generateNewSession();
+        await generateNewSessionWith(resolvedFileName!, pages);
       }
     }
-    initSession();
+    init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileName]);
+  }, [id]);
 
   // ─── Generate chapter plan and create fresh session ───────────────────
-  const generateNewSession = useCallback(async () => {
+  const generateNewSessionWith = useCallback(async (resolvedFileName: string, resolvedPages: number) => {
     setPhase('generating_plan');
     clearSession(id);
 
     try {
-      // Fetch page count if we don't have it
-      let pages = totalPages;
-      if (!pages) {
-        const pRes = await fetch(`/api/pdfs/pages?chapterId=${id}`);
-        const pData = await pRes.json();
-        pages = pData.totalPages || 1;
-        setTotalPages(pages);
-      }
-
-      // Generate chapter plan
+      // Generate chapter plan (now reads from DB cache if already generated)
       const cpRes = await fetch('/api/pdfs/chapter-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chapterId: id, fileName: fileName! }),
+        body: JSON.stringify({ chapterId: id, fileName: resolvedFileName }),
       });
       const cpData = await cpRes.json();
       const chapterPlan: ChapterPlan | null = cpData.success ? cpData.chapterPlan : null;
 
-      const newSession = createInitialSession(id, fileName!, pages!, chapterPlan);
+      const newSession = createInitialSession(id, resolvedFileName, resolvedPages, chapterPlan);
       saveSession(newSession);
       setSession(newSession);
       setPhase('active');
     } catch (err) {
       console.error('Failed to generate session:', err);
-      // Fallback: create session without chapter plan
-      const pages = totalPages || 1;
-      const fallback = createInitialSession(id, fileName!, pages, null);
+      const fallback = createInitialSession(id, resolvedFileName, resolvedPages, null);
       saveSession(fallback);
       setSession(fallback);
       setPhase('active');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalPages, id, fileName]);
+  }, [id]);
 
   // ─── Resume handler ──────────────────────────────────────────────────
   const handleResume = () => {
@@ -166,7 +134,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const handleStartFresh = async () => {
     if (!fileName) return;
     clearSession(id);
-    await generateNewSession();
+    await generateNewSessionWith(fileName, totalPages || 1);
   };
 
   // ─── Page navigation with persistence ─────────────────────────────────

@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function POST(req: Request) {
   try {
-    const { chapterId, studentName, examData, answers, score, totalMarks, sectionScores, timeTaken } = await req.json();
+    const { chapterId, studentName, examData, answers, score, totalMarks, sectionScores, timeTaken, questionTimings, tabSwitches, integrityFlags } = await req.json();
 
     if (!chapterId || !examData) {
       return NextResponse.json({ error: 'chapterId and examData required' }, { status: 400 });
@@ -40,6 +40,9 @@ export async function POST(req: Request) {
         attempt_number: attemptNumber,
         section_scores: sectionScores || [],
         time_taken_seconds: timeTaken || 0,
+        question_timings: questionTimings || {},
+        tab_switches: tabSwitches || 0,
+        integrity_flags: integrityFlags || {},
       })
       .select('id, attempt_number')
       .single();

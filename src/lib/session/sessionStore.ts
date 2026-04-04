@@ -81,6 +81,8 @@ export interface SessionState {
 
 /** Max messages to keep per page in localStorage (prevents quota overflow) */
 const MAX_MESSAGES_PER_PAGE = 50;
+/** Observer states are small but accumulate per page — keep last N pages visited */
+const MAX_OBSERVER_PAGES = 20;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -89,15 +91,33 @@ function getSessionKey(id: string): string {
   return `adoris_session_${btoa(id)}`;
 }
 
-/** Trim chat histories to prevent localStorage from exceeding quota */
+/** Trim all growing JSONB blobs to prevent localStorage and Supabase row bloat */
 function trimSession(state: SessionState): SessionState {
-  const trimmed = { ...state, chatHistories: { ...state.chatHistories } };
+  const trimmed = {
+    ...state,
+    chatHistories: { ...state.chatHistories },
+    observerStates: { ...state.observerStates },
+  };
+
+  // Trim chat histories (50 messages/page max)
   for (const page of Object.keys(trimmed.chatHistories)) {
     const msgs = trimmed.chatHistories[Number(page)];
     if (msgs && msgs.length > MAX_MESSAGES_PER_PAGE) {
       trimmed.chatHistories[Number(page)] = msgs.slice(-MAX_MESSAGES_PER_PAGE);
     }
   }
+
+  // Trim observer states — only keep the most recently visited pages
+  const observerPages = Object.keys(trimmed.observerStates).map(Number).sort((a, b) => b - a);
+  if (observerPages.length > MAX_OBSERVER_PAGES) {
+    const pagesToKeep = new Set(observerPages.slice(0, MAX_OBSERVER_PAGES));
+    for (const page of observerPages) {
+      if (!pagesToKeep.has(page)) {
+        delete trimmed.observerStates[page];
+      }
+    }
+  }
+
   return trimmed;
 }
 

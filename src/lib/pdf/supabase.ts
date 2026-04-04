@@ -1,12 +1,20 @@
 import { PDFDocument } from 'pdf-lib';
 import { createServiceClient } from '@/lib/supabase/service';
+import { getCachedPdfBuffer, setCachedPdfBuffer } from './bufferCache';
 
 /**
  * Given a chapter UUID, fetches the `storage_path` from the database,
  * downloads the PDF from the 'pdfs' bucket, and returns it as a Buffer.
  * Uses the service role client to bypass RLS policies.
+ *
+ * Results are cached in-memory for 15 minutes so concurrent page requests
+ * within the same session don't each trigger a separate Storage download.
  */
 export async function getPdfBufferFromChapterId(chapterId: string): Promise<Buffer> {
+  // Fast path: already in memory
+  const cached = getCachedPdfBuffer(chapterId);
+  if (cached) return cached;
+
   const supabase = createServiceClient();
   
   // 1. Get the storage_path for this chapter
@@ -31,7 +39,10 @@ export async function getPdfBufferFromChapterId(chapterId: string): Promise<Buff
   }
 
   const arrayBuffer = await fileData.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  const buffer = Buffer.from(arrayBuffer);
+
+  setCachedPdfBuffer(chapterId, buffer);
+  return buffer;
 }
 
 /**

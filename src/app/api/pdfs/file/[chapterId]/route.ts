@@ -8,13 +8,15 @@ export async function GET(
   try {
     const chapterId = (await params).chapterId;
     
-    // Download PDF from Supabase
+    // Download PDF from Supabase (served from in-memory cache after first load)
     const fileBuffer = await getPdfBufferFromChapterId(chapterId);
 
     return new NextResponse(fileBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${chapterId}.pdf"`,
+        // Cache in browser for 1 hour — prevents re-download on every page turn
+        'Cache-Control': 'private, max-age=3600, stale-while-revalidate=3600',
       },
     });
   } catch (error) {
