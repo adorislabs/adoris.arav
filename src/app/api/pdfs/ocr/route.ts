@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPdfBufferFromChapterId, getPdfPageAsBase64FromBuffer } from '@/lib/pdf/supabase';
 import { ocrPdfPage } from '@/lib/llm/ocr';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +10,11 @@ export async function POST(req: Request) {
     if (!chapterId || pageIndex === undefined) {
       return NextResponse.json({ error: 'chapterId and pageIndex required' }, { status: 400 });
     }
+
+    // Auth check — prevent unauthenticated LLM cost abuse
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // 1. Download buffer for this chapter
     const buffer = await getPdfBufferFromChapterId(chapterId);

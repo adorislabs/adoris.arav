@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getPdfBufferFromChapterId } from '@/lib/pdf/supabase';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(
   request: Request,
@@ -7,7 +8,22 @@ export async function GET(
 ) {
   try {
     const chapterId = (await params).chapterId;
-    
+
+    // Authenticate and verify chapter ownership
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new NextResponse('Unauthorized', { status: 401 });
+
+    const { data: chapter, error: chapterErr } = await supabase
+      .from('chapters')
+      .select('id, books!inner(user_id)')
+      .eq('id', chapterId)
+      .single();
+
+    if (chapterErr || !chapter || (chapter.books as any)?.user_id !== user.id) {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+
     // Download PDF from Supabase (served from in-memory cache after first load)
     const fileBuffer = await getPdfBufferFromChapterId(chapterId);
 

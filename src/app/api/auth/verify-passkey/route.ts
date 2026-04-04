@@ -1,11 +1,27 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 
 // Use the public anon client — app_config has public read RLS
 const supabasePublic = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+/**
+ * Constant-time string comparison to prevent timing oracle attacks.
+ * Always takes the same amount of time regardless of where strings differ.
+ */
+function safeCompare(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) {
+    // Perform a dummy comparison so execution time doesn't reveal length mismatch
+    timingSafeEqual(aBuf, aBuf);
+    return false;
+  }
+  return timingSafeEqual(aBuf, bBuf);
+}
 
 /**
  * POST /api/auth/verify-passkey
@@ -32,7 +48,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Config not found — run the passkey SQL migration first' }, { status: 500 });
     }
 
-    if (passkey.trim() !== config.value) {
+    if (!safeCompare(passkey.trim(), config.value)) {
       return NextResponse.json({ error: 'Invalid passkey' }, { status: 403 });
     }
 

@@ -33,6 +33,7 @@ export async function POST(
       .from('books')
       .select('id')
       .eq('id', bookId)
+      .eq('user_id', user.id)
       .single();
 
     if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 });

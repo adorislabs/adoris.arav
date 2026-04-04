@@ -40,7 +40,7 @@ describe('PasskeyGate', () => {
     mockGetSession.mockResolvedValue({ data: { session: null } });
     render(<PasskeyGate><div>App Content</div></PasskeyGate>);
     await waitFor(() => {
-      expect(screen.getByText('Enter your passkey to continue')).toBeInTheDocument();
+      expect(screen.getByText('Enter your secure passkey to access study sessions.')).toBeInTheDocument();
     });
   });
 

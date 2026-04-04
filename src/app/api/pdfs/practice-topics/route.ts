@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generatePracticeTopics } from '@/lib/llm/problemSetGenerator';
 import type { PagePlanEntry } from '@/lib/session/sessionStore';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * POST /api/pdfs/practice-topics
@@ -12,6 +13,11 @@ import type { PagePlanEntry } from '@/lib/session/sessionStore';
  */
 export async function POST(req: Request) {
   try {
+    // Auth check — prevent unauthenticated LLM cost abuse
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { pagePlans, chapterTitle } = await req.json();
 
     if (!Array.isArray(pagePlans) || pagePlans.length === 0) {

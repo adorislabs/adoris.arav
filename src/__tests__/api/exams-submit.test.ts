@@ -45,7 +45,7 @@ describe('POST /api/exams/submit', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects missing score', async () => {
+  it('rejects missing examData', async () => {
     const res = await POST(makeRequest('POST', { chapterId: 'ch1', studentName: 'Alice', totalMarks: 60 }));
     expect(res.status).toBe(400);
   });

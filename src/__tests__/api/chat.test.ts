@@ -10,6 +10,20 @@ vi.mock('@/config/tutorConfig', () => ({
   tutorConfig: { observerFrequency: 4 },
 }));
 
+// Mock Supabase so authenticated calls don't hit the network
+const { mockSupabase } = vi.hoisted(() => {
+  const mockSupabase = {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user' } } }),
+    },
+  };
+  return { mockSupabase };
+});
+
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn().mockResolvedValue(mockSupabase),
+}));
+
 import { POST } from '@/app/api/chat/route';
 import { askTutor, extractMasteryData } from '@/lib/llm';
 
@@ -24,6 +38,13 @@ function makeRequest(body: Record<string, unknown>) {
 describe('POST /api/chat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'test-user' } } });
+  });
+
+  it('returns 401 when unauthenticated', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null } });
+    const res = await POST(makeRequest({ message: 'test' }));
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 when message is missing', async () => {

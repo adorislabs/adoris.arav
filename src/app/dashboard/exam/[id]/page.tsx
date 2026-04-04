@@ -27,6 +27,9 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   const [showMobileNav, setShowMobileNav] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
+  // Ref pointing to the latest handleSubmitExam — allows the timer to call it
+  // without capturing a stale closure
+  const handleSubmitExamRef = useRef<() => void>(() => {});
 
   // ─── Per-question timing ─────────────────────────────────────────────
   // Maps globalIndex → cumulative seconds spent on that question
@@ -113,7 +116,8 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current!);
-          setSubmitted(true);
+          // Call via ref to always use the latest version (avoids stale closure)
+          setTimeout(() => handleSubmitExamRef.current(), 0);
           return 0;
         }
         return prev - 1;
@@ -260,7 +264,6 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     setSubmitted(true);
     setShowAnswerKey(true);
     if (timerRef.current) clearInterval(timerRef.current);
-
     // Save results to API
     if (exam) {
       const timeTaken = Math.floor((Date.now() - startTimeRef.current) / 1000);
@@ -292,6 +295,11 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
       }).catch(() => { /* fire and forget */ });
     }
   }, [exam, scoreResult, id, studentName, answers, recordQuestionTime]);
+
+  // Keep the ref in sync so the timer can call the latest version
+  useEffect(() => {
+    handleSubmitExamRef.current = handleSubmitExam;
+  }, [handleSubmitExam]);
 
   // ─── Keyboard navigation ──────────────────────────────────────────────
   useEffect(() => {

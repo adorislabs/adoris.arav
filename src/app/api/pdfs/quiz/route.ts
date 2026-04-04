@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
+import { createClient } from '@/lib/supabase/server';
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -20,6 +21,11 @@ function filterSubjectTopics(topics: string[]): string[] {
 
 export async function POST(req: Request) {
   try {
+    // Auth check — prevent unauthenticated LLM cost abuse
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { fileName, chapterPlan, lessonPlans, summaryData } = await req.json();
 
     // Build a rich context from the chapter plan and all lesson plans

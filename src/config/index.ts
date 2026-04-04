@@ -9,6 +9,7 @@ export const config = {
   app: {
     url: process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
     studentName: process.env.NEXT_PUBLIC_STUDENT_NAME || 'Student',
-    passkey: process.env.NEXT_PUBLIC_PASSKEY || 'default-passkey',
+    // NOTE: passkey is stored in the DB (app_config table) and verified server-side.
+    // Do NOT add it here as a NEXT_PUBLIC_ variable — that would expose it to the browser.
   },
 };

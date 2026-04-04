@@ -33,16 +33,16 @@ export async function POST(req: Request) {
     }
 
     // Check if we already have a problem set for this topic
-    const query = supabase
+    let query = supabase
       .from('problem_sets')
       .select('id, problems')
       .eq('user_id', user.id)
       .eq('topic', topic);
 
     if (chapterId) {
-      query.eq('chapter_id', chapterId);
+      query = query.eq('chapter_id', chapterId);
     } else {
-      query.eq('file_name', fileName);
+      query = query.eq('file_name', fileName);
     }
     
     const { data: existing } = await query.maybeSingle();

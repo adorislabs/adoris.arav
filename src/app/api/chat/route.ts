@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server';
 import { askTutor, extractMasteryData } from '@/lib/llm';
 import { tutorConfig } from '@/config/tutorConfig';
+import { createClient } from '@/lib/supabase/server';
 
 // Track message count per session for Observer frequency throttling
 const messageCounters = new Map<string, number>();
 
 export async function POST(req: Request) {
   try {
+    // Require an authenticated session (passkey gate ensures all users have one)
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { message, history, lessonPlan, currentPage, pagePlanEntry, chapterId, observerContext } = body;
 

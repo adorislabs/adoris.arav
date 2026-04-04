@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateExam } from '@/lib/llm/examGenerator';
 import { createServiceClient } from '@/lib/supabase/service';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +10,11 @@ export async function POST(req: Request) {
     if (!fileName && !chapterId) {
       return NextResponse.json({ error: 'chapterId or fileName required' }, { status: 400 });
     }
+
+    // Auth check — prevent unauthenticated LLM cost abuse
+    const authClient = await createClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabase = createServiceClient();
 
