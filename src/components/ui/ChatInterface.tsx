@@ -262,37 +262,37 @@ export function ChatInterface({
     <div className="flex flex-col h-full w-full relative overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       
       {/* Clean header */}
-      <div className="flex-none px-5 py-3.5 border-b flex items-center justify-between" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+      <div className="flex-none px-6 py-4 glass-panel border-b border-white/5 flex items-center justify-between z-10 shadow-subtle shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: isPageUnlocked ? 'var(--success)' : diffColor, opacity: isPageUnlocked ? 1 : 0.7 }} />
+          <div className="w-2.5 h-2.5 rounded-full shrink-0 shadow-glow" style={{ background: isPageUnlocked ? 'var(--success)' : diffColor, opacity: isPageUnlocked ? 1 : 0.8 }} />
           <div className="min-w-0">
             <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
               {pagePlanEntry?.topics?.[0] || `Page ${currentPage + 1}`}
             </p>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
               {isPageUnlocked ? 'Concept mastered' : pagePlanEntry?.estimated_difficulty ? `${pagePlanEntry.estimated_difficulty} difficulty` : 'In progress'}
             </p>
           </div>
         </div>
         {isPageUnlocked && (
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(64,145,108,0.1)', color: 'var(--success)' }}>
+          <span className="text-xs font-semibold px-3 py-1.5 rounded-full border border-green-500/20" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--success)' }}>
             ✓ Mastered
           </span>
         )}
       </div>
 
       {/* Messages */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-4">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-6">
 
         {displayTimeline.map((item, idx) => {
           if (item.type === 'separator') {
             return (
-              <div key={`sep-${item.page}-${idx}`} className="flex items-center py-3 animate-fadeIn">
-                <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
-                <span className="px-3 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+              <div key={`sep-${item.page}-${idx}`} className="flex items-center py-4 animate-fadeIn">
+                <div className="flex-1 h-px bg-white/5" />
+                <span className="px-4 text-[11px] font-medium tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
                   Page {item.page + 1}
                 </span>
-                <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+                <div className="flex-1 h-px bg-white/5" />
               </div>
             );
           }
@@ -303,20 +303,19 @@ export function ChatInterface({
           
           return (
             <div key={msg.id} className={`flex w-full animate-slideUp ${isUser ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] md:max-w-[78%]`}>
-                <div className={`rounded-2xl px-5 py-4 ${isUser ? 'rounded-br-md' : 'rounded-bl-md'}`} style={{
-                  background: isUser ? 'var(--accent)' : 'var(--bg-surface)',
+              <div className={`max-w-[88%] md:max-w-[80%]`}>
+                <div className={`rounded-[20px] px-5 py-4 ${isUser ? 'rounded-br-sm shadow-subtle' : 'rounded-bl-sm glass-panel'}`} style={{
+                  background: isUser ? 'var(--accent)' : undefined,
                   color: isUser ? '#fff' : 'var(--text-primary)',
-                  border: isUser ? 'none' : '1px solid var(--border)',
-                  boxShadow: isUser ? 'none' : '0 1px 3px rgba(0,0,0,0.04)',
+                  boxShadow: isUser ? '0 4px 12px rgba(16,185,129,0.15)' : undefined,
                 }}>
                   {msg.id === 'system-loading' ? (
                     <div className="flex items-center gap-3 py-1">
-                      <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
-                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Preparing your lesson...</span>
+                      <div className="w-5 h-5 border-[2px] border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Preparing your lesson...</span>
                     </div>
                   ) : (
-                    <div className={isUser ? 'text-sm leading-relaxed' : 'adoris-prose'}>
+                    <div className={isUser ? 'text-[15px] leading-relaxed' : 'adoris-prose text-[15px]'}>
                       <MemoMarkdown content={msg.content} />
                     </div>
                   )}
@@ -329,28 +328,27 @@ export function ChatInterface({
         {/* Loading indicator */}
         {isLoading && messages[messages.length - 1]?.role === 'user' && (
           <div className="flex w-full justify-start animate-fadeIn">
-            <div className="rounded-2xl rounded-bl-md px-5 py-4 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+            <div className="rounded-[20px] rounded-bl-sm px-6 py-5 glass-panel flex items-center justify-center min-w-[80px]">
               <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '300ms' }} />
+                <div className="flex gap-1.5 opacity-80">
+                  <div className="w-1.5 h-1.5 rounded-full animate-bounce shadow-glow" style={{ background: 'var(--accent)', animationDelay: '0ms' }} />
+                  <div className="w-1.5 h-1.5 rounded-full animate-bounce shadow-glow" style={{ background: 'var(--accent)', animationDelay: '150ms' }} />
+                  <div className="w-1.5 h-1.5 rounded-full animate-bounce shadow-glow" style={{ background: 'var(--accent)', animationDelay: '300ms' }} />
                 </div>
-                <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>Thinking...</span>
               </div>
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} className="h-1" />
+        <div ref={messagesEndRef} className="h-4" />
       </div>
 
       {/* Quick doubt buttons */}
       {lessonPlan?.suggestive_doubts && lessonPlan.suggestive_doubts.length > 0 && messages.length <= 2 && !isLoading && (
-        <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+        <div className="px-6 pb-4 flex gap-2.5 overflow-x-auto no-scrollbar mask-edges">
           {lessonPlan.suggestive_doubts.slice(0, 3).map((doubt, i) => (
             <button key={i} onClick={() => handleQuickDoubt(doubt)}
-              className="shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors hover:border-[var(--accent)]"
-              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              className="shrink-0 text-[13px] font-medium px-4 py-2.5 rounded-full border transition-all hover:scale-[1.02] active:scale-95 shadow-subtle"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
               {doubt}
             </button>
@@ -359,9 +357,9 @@ export function ChatInterface({
       )}
 
       {/* Input area */}
-      <div className="px-4 py-3 border-t" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto flex items-end gap-2">
-          <div className="flex-1 rounded-xl border overflow-hidden transition-colors focus-within:border-[var(--accent)]" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
+      <div className="px-4 md:px-6 py-4 glass-panel border-t border-white/5 z-10 relative">
+        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex items-end gap-3 relative">
+          <div className="flex-1 rounded-2xl border transition-all focus-within:border-[var(--accent)] focus-within:shadow-glow bg-black/40 backdrop-blur-md" style={{ borderColor: 'var(--border)' }}>
             <textarea
               ref={textareaRef}
               value={input}
@@ -370,20 +368,23 @@ export function ChatInterface({
               placeholder={isLoading ? 'Waiting for response...' : 'Ask a question or share your thoughts...'}
               disabled={isLoading}
               rows={1}
-              className="w-full resize-none bg-transparent outline-none px-4 py-3 text-sm leading-relaxed"
-              style={{ color: 'var(--text-primary)', minHeight: '44px', maxHeight: '160px' }}
+              className="w-full resize-none bg-transparent outline-none px-5 py-3.5 text-[15px] leading-relaxed placeholder:text-white/30"
+              style={{ color: 'var(--text-primary)', minHeight: '52px', maxHeight: '160px' }}
             />
           </div>
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all"
+            className="shrink-0 w-12 h-[52px] rounded-2xl flex items-center justify-center transition-all disabled:opacity-40 hover:scale-[1.02] active:scale-95 group"
             style={{
-              background: input.trim() && !isLoading ? 'var(--accent)' : 'var(--bg-muted)',
+              background: input.trim() && !isLoading ? 'var(--accent)' : 'var(--bg-surface)',
               color: input.trim() && !isLoading ? '#fff' : 'var(--text-muted)',
+              boxShadow: input.trim() && !isLoading ? '0 4px 16px rgba(16,185,129,0.25)' : undefined,
+              border: input.trim() && !isLoading ? 'none' : '1px solid var(--border)',
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className={input.trim() && !isLoading ? 'group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform' : ''}>
               <path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" />
             </svg>
           </button>
@@ -393,10 +394,10 @@ export function ChatInterface({
       {/* Scroll to bottom */}
       {showScrollBtn && (
         <button onClick={() => scrollToBottom()}
-          className="absolute bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 text-xs font-medium rounded-full shadow-lg transition-colors animate-fadeIn z-30"
-          style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+          className="absolute bottom-28 left-1/2 -translate-x-1/2 px-5 py-2.5 text-[13px] font-medium rounded-full transition-all animate-fadeIn z-30 shadow-elevated glass-panel border border-white/10 hover:scale-105 active:scale-95"
+          style={{ color: 'var(--text-primary)' }}
         >
-          ↓ Jump to latest
+           Jump to latest
         </button>
       )}
     </div>

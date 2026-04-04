@@ -81,52 +81,60 @@ export default function PasskeyGate({ children }: { children: React.ReactNode })
   return (
     <>
       {/* Blurred bg */}
-      <div className="pointer-events-none select-none opacity-10 blur-md">{children}</div>
+      <div className="pointer-events-none select-none opacity-20 blur-xl transition-all duration-700">{children}</div>
 
       {/* Overlay */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center"
-        style={{ background: 'rgba(12,12,14,0.92)', backdropFilter: 'blur(20px)' }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-500"
+        style={{ background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' }}
       >
         <div
-          className="animate-slideUp w-full max-w-xs mx-6 rounded-2xl p-8 shadow-lg"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+          className="animate-slideUp w-full max-w-sm rounded-[24px] p-10 shadow-elevated relative overflow-hidden"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-soft)' }}
         >
+          {/* Subtle top glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-accent opacity-20 blur-[10px] rounded-full"></div>
+
           {/* Logo mark */}
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-6"
-            style={{ background: 'var(--accent-muted)' }}
+            className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-subtle border border-white/5"
+            style={{ background: 'var(--bg-elevated)' }}
           >
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+            <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
               <path d="M8 1.5L13 4.5V10.5L8 13.5L3 10.5V4.5L8 1.5Z"
-                stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round" />
+                stroke="var(--accent)" strokeWidth="1.5" strokeLinejoin="round" className="drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
               <circle cx="8" cy="7.5" r="2" fill="var(--accent)" />
             </svg>
           </div>
 
-          <h2 className="text-center text-sm font-medium mb-6" style={{ color: 'var(--text-secondary)' }}>
-            Enter your passkey to continue
+          <h2 className="text-center text-lg font-serif font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+            Welcome to Adoris
           </h2>
+          <p className="text-center text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>
+            Enter your secure passkey to access study sessions.
+          </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              ref={inputRef}
-              type="password"
-              value={input}
-              onChange={e => { setInput(e.target.value); setError(''); }}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="Passkey"
-              className="w-full rounded-xl border px-4 py-3 text-sm text-center tracking-[0.2em] outline-none transition-colors focus:border-[var(--accent)]"
-              style={{
-                borderColor: error ? 'var(--error)' : 'var(--border)',
-                background: 'var(--bg-elevated)',
-                color: 'var(--text-primary)',
-              }}
-            />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="relative">
+              <input
+                ref={inputRef}
+                type="password"
+                value={input}
+                onChange={e => { setInput(e.target.value); setError(''); }}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Passkey"
+                className="w-full rounded-2xl border px-5 py-4 text-center tracking-[0.25em] outline-none transition-all duration-300 focus:border-[var(--accent)] focus:shadow-glow font-mono text-lg"
+                style={{
+                  borderColor: error ? 'var(--error)' : 'var(--border)',
+                  background: 'var(--bg-base)',
+                  color: 'var(--text-primary)',
+                }}
+              />
+            </div>
 
             {error && (
-              <p className="text-xs text-center animate-fadeIn" style={{ color: 'var(--error)' }}>
+              <p className="text-xs text-center animate-fadeIn font-medium" style={{ color: 'var(--error)' }}>
                 {error}
               </p>
             )}
@@ -134,13 +142,13 @@ export default function PasskeyGate({ children }: { children: React.ReactNode })
             <button
               type="submit"
               disabled={!input.trim() || checking}
-              className="w-full py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
+              className="w-full py-4 rounded-2xl text-sm font-semibold tracking-wide transition-all duration-300 disabled:opacity-40 hover:opacity-90 active:scale-[0.98] shadow-glow"
               style={{
                 background: 'var(--accent)',
                 color: '#fff',
               }}
             >
-              {checking ? 'Verifying...' : 'Continue'}
+              {checking ? 'Verifying...' : 'Unlock Content'}
             </button>
           </form>
         </div>

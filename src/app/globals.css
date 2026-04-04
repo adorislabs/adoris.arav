@@ -2,31 +2,36 @@
 @import "tailwindcss";
 
 :root {
-  /* Dark Mode — comfortable for long study sessions */
-  --bg-base:     #0c0c0e;   /* Near-black background */
-  --bg-surface:  #141416;   /* Card surface */
-  --bg-elevated: #1c1c1f;   /* Inputs, hover states */
-  --bg-muted:    #242428;   /* Subtle fills */
+  /* Dark Mode — Premium and distraction-free */
+  --bg-base:     #09090b;   /* Near-black deep space */
+  --bg-surface:  #101014;   /* Card surface - slightly elevated */
+  --bg-elevated: #1a1a1f;   /* Inputs, hover states */
+  --bg-muted:    #222228;   /* Subtle fills for tags/badges */
 
   /* Borders */
-  --border:      #2a2a2e;
-  --border-soft: #222226;
+  --border:      #27272a;
+  --border-soft: #1f1f22;
 
   /* Text */
-  --text-primary:   #e8e6e1;
-  --text-secondary: #8a8884;
-  --text-muted:     #5a5856;
+  --text-primary:   #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted:     #71717a;
 
-  /* Accent - Soft sage green (easy on dark backgrounds) */
-  --accent:         #4ade80;
-  --accent-muted:   rgba(74, 222, 128, 0.12);
-  --accent-hover:   #86efac;
-  --accent-light:   rgba(74, 222, 128, 0.15);
+  /* Accent - Soft emerald green (refined, less stark than strict neon) */
+  --accent:         #10b981;
+  --accent-muted:   rgba(16, 185, 129, 0.12);
+  --accent-hover:   #34d399;
+  --accent-light:   rgba(16, 185, 129, 0.18);
 
   /* Status */
-  --success:  #4ade80;
-  --error:    #f87171;
-  --warning:  #fbbf24;
+  --success:  #10b981;
+  --error:    #f43f5e;
+  --warning:  #f59e0b;
+
+  /* Shadows - Premium Depth */
+  --shadow-subtle:   0 1px 2px 0 rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  --shadow-elevated: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  --shadow-glow:     0 0 15px -3px rgba(16, 185, 129, 0.15);
 
   --font-sans: var(--font-inter), -apple-system, sans-serif;
   --font-serif: var(--font-lora), 'Georgia', serif;
@@ -77,6 +82,19 @@ h1, h2, h3, h4, h5, h6 {
   .border-dim       { border-color: var(--border); }
   .font-sans        { font-family: var(--font-sans); }
   .font-serif       { font-family: var(--font-serif); }
+
+  /* Premium Shadows / Elements */
+  .shadow-subtle { box-shadow: var(--shadow-subtle); }
+  .shadow-elevated { box-shadow: var(--shadow-elevated); }
+  .shadow-glow { box-shadow: var(--shadow-glow); }
+  
+  .glass-panel {
+    background: rgba(16, 16, 20, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: var(--shadow-subtle);
+  }
 }
 
 @keyframes fadeIn    { from { opacity: 0; } to { opacity: 1; } }

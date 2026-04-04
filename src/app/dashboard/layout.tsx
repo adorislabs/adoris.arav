@@ -26,16 +26,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <div className="flex flex-col h-dvh overflow-hidden bg-base text-primary font-sans">
         
         {/* Soft Header Navigation - Replaces Sidebar */}
-        <header className="h-16 w-full flex items-center justify-between px-6 border-b border-dim bg-base shrink-0 z-20 shadow-sm relative">
+        <header className="h-16 w-full flex items-center justify-between px-6 z-20 shadow-subtle relative glass-panel mb-2 border-b-0">
           <div className="flex items-center gap-12">
             <Logo />
             <nav className="hidden md:flex gap-8">
-              <Link href="/dashboard" className="text-sm font-medium text-dim hover:text-primary transition-colors flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <Link href="/dashboard" className="text-sm font-medium text-dim hover:text-primary hover:-translate-y-[1px] transition-all flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-80"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
                 Study Sessions
               </Link>
-              <Link href="/dashboard/library" className="text-sm font-medium text-dim hover:text-primary transition-colors flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-0-5H20"/></svg>
+              <Link href="/dashboard/library" className="text-sm font-medium text-dim hover:text-primary hover:-translate-y-[1px] transition-all flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-80"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-0-5H20"/></svg>
                 Library
               </Link>
             </nav>
@@ -44,7 +44,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <div className="flex items-center gap-6">
             {user?.email && <span className="text-sm text-dim hidden md:block">{user.email}</span>}
             <form action="/auth/signout" method="post">
-              <button className="text-sm font-medium text-dim hover:text-primary transition-colors px-3 py-1.5 rounded-lg hover:bg-elevated">
+              <button className="text-sm font-medium text-dim hover:text-primary transition-all px-4 py-2 rounded-xl hover:bg-elevated border border-transparent hover:border-dim active:scale-95 shadow-none hover:shadow-subtle">
                 Sign Out
               </button>
             </form>
@@ -52,14 +52,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         </header>
 
         {/* Main Interface Canvas */}
-        <main className="flex-1 overflow-hidden bg-base md:p-3 relative">
-          <div className="w-full h-full bg-surface md:rounded-2xl md:border border-dim shadow-sm overflow-hidden flex flex-col relative">
+        <main className="flex-1 overflow-hidden bg-base md:px-4 md:pb-4 relative">
+          <div className="w-full h-full bg-surface md:rounded-2xl border-t md:border border-dim shadow-elevated overflow-hidden flex flex-col relative transition-all">
             {children}
           </div>
         </main>
 
         {/* Mobile Bottom Nav */}
-        <nav className="md:hidden flex items-stretch h-16 border-t border-dim shrink-0 bg-surface">
+        <nav className="md:hidden flex items-stretch h-16 border-t border-dim shrink-0 glass-panel shadow-[0_-4px_12px_rgba(0,0,0,0.2)] pb-safe relative z-20">
           {[
             {
               href: '/dashboard',
