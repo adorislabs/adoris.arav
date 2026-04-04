@@ -1,4 +1,6 @@
-import { ReactNode } from 'react';
+const fs = require('fs');
+
+const code = `import { ReactNode } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import PasskeyGate from '@/components/ui/PasskeyGate';
@@ -126,3 +128,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     </PasskeyGate>
   );
 }
+`;
+
+fs.writeFileSync('src/app/dashboard/layout.tsx', code);
+console.log('DashboardLayout successfully updated');

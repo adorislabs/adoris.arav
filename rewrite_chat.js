@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+const code = `
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
@@ -147,7 +149,7 @@ export function ChatInterface({
           const welcomeMsg: Message = {
             id: Date.now().toString(),
             role: 'assistant',
-            content: `${explanation}\n\n**Question:** ${question}`,
+            content: \`\${explanation}\\n\\n**Question:** \${question}\`,
           };
           setMessages([welcomeMsg]);
           persistMessages([welcomeMsg]);
@@ -288,7 +290,7 @@ export function ChatInterface({
         {displayTimeline.map((item, idx) => {
           if (item.type === 'separator') {
             return (
-              <div key={`sep-${item.page}-${idx}`} className="flex items-center pt-8 pb-4 relative z-10 w-full animate-fadeIn" style={{ animationDelay: '0.1s' }}>
+              <div key={\`sep-\${item.page}-\${idx}\`} className="flex items-center pt-8 pb-4 relative z-10 w-full animate-fadeIn" style={{ animationDelay: '0.1s' }}>
                 <div className="flex-1 h-[1px] bg-dim opacity-30"></div>
                 <div className="px-4 py-1 border border-dim bg-bg-surface text-[10px] uppercase font-bold text-accent glass-panel tracking-widest shadow-[0_0_10px_var(--accent-muted)]">
                   [ System.Page_{item.page + 1}.Initialized ]
@@ -303,8 +305,8 @@ export function ChatInterface({
           const isUser = msg.role === 'user';
           
           return (
-            <div key={msg.id} className={`flex w-full animate-slideUp relative z-10 ${isUser ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex max-w-[90%] md:max-w-[80%] flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+            <div key={msg.id} className={\`flex w-full animate-slideUp relative z-10 \${isUser ? 'justify-end' : 'justify-start'}\`}>
+              <div className={\`flex max-w-[90%] md:max-w-[80%] flex-col \${isUser ? 'items-end' : 'items-start'}\`}>
 
                 <div className="text-[10px] md:text-xs uppercase font-mono text-dim mb-1 tracking-wider flex items-center gap-2">
                   {isUser ? (
@@ -314,11 +316,11 @@ export function ChatInterface({
                   )}
                 </div>
 
-                <div className={`p-4 tech-border ${
+                <div className={\`p-4 tech-border \${
                   isUser 
                     ? 'border-r-2 border-r-success bg-surface/80 text-primary self-end backdrop-blur-md' 
                     : 'border-l-2 border-l-accent glass-panel text-primary shadow-[0_4px_24px_var(--accent-muted)]'
-                }`}>
+                }\`}>
                   {msg.id === 'system-loading' ? (
                      <div className="text-accent font-mono text-sm py-2">
                        Processing Page Data...
@@ -375,14 +377,14 @@ export function ChatInterface({
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className={`px-6 py-2 text-[10px] uppercase font-bold tracking-widest tech-border transition-all flex items-center gap-2 ${
+              className={\`px-6 py-2 text-[10px] uppercase font-bold tracking-widest tech-border transition-all flex items-center gap-2 \${
                 input.trim() && !isLoading
                   ? 'bg-accent/10 text-accent border-accent hover:bg-accent hover:text-black shadow-[0_0_15px_var(--accent-muted)]'
                   : 'bg-transparent text-dim border-dim cursor-not-allowed'
-              }`}
+              }\`}
             >
               Execute
-              <div className={`w-1.5 h-1.5 rounded-none ${input.trim() && !isLoading ? 'bg-accent group-hover:bg-black animate-pulse' : 'bg-dim'}`}></div>
+              <div className={\`w-1.5 h-1.5 rounded-none \${input.trim() && !isLoading ? 'bg-accent group-hover:bg-black animate-pulse' : 'bg-dim'}\`}></div>
             </button>
           </div>
         </form>
@@ -399,3 +401,7 @@ export function ChatInterface({
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/ui/ChatInterface.tsx', code);
+console.log('ChatInterface successfully updated');

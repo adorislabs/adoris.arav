@@ -1,8 +1,17 @@
 import type { Metadata } from "next";
-import { DM_Sans } from "next/font/google";
+import { JetBrains_Mono, Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 
-const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans" });
+const jetbrainsMono = JetBrains_Mono({ 
+  subsets: ["latin"], 
+  variable: "--font-jetbrains-mono" 
+});
+
+const cormorant = Cormorant_Garamond({ 
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"], 
+  variable: "--font-cormorant" 
+});
 
 export const metadata: Metadata = {
   title: "Active AI Tutor",
@@ -16,7 +25,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={dmSans.className}>{children}</body>
+      <body className={`${jetbrainsMono.variable} ${cormorant.variable} bg-base text-primary font-mono`}>
+        {children}
+      </body>
     </html>
   );
 }

@@ -17,7 +17,6 @@ export function SplitPane({ leftPane, rightPane }: SplitPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
 
-  // ─── Drag logic ───────────────────────────────────────────────────
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     dragging.current = true;
@@ -35,10 +34,8 @@ export function SplitPane({ leftPane, rightPane }: SplitPaneProps) {
     dragging.current = false;
   }, []);
 
-  // ─── Keyboard shortcut: [ and ] to resize, \ to reset ────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Only when no input/textarea is focused
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
 
@@ -51,13 +48,14 @@ export function SplitPane({ leftPane, rightPane }: SplitPaneProps) {
   }, []);
 
   return (
-    <div className="flex h-full w-full">
+    <div className="flex h-full w-full bg-base font-mono">
       {/* Desktop: resizable side-by-side */}
       <div ref={containerRef} className="hidden md:flex h-full w-full">
         <div
-          className="min-w-0 overflow-hidden border-r"
-          style={{ width: `${leftPct}%`, background: 'var(--bg-base)', borderColor: 'var(--border)' }}
+          className="min-w-0 overflow-hidden border-r border-dim relative glass-panel tech-border"
+          style={{ width: `${leftPct}%` }}
         >
+          <div className="absolute top-0 left-0 w-full h-1 bg-accent opacity-20"></div>
           {leftPane}
         </div>
 
@@ -66,56 +64,50 @@ export function SplitPane({ leftPane, rightPane }: SplitPaneProps) {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          className="shrink-0 w-1.5 cursor-col-resize group relative hover:w-2 transition-all"
-          style={{ background: 'var(--border)' }}
+          className="shrink-0 w-2 cursor-col-resize group relative hover:w-3 transition-all z-10 flex flex-col justify-center items-center"
+          style={{ background: 'var(--bg-base)', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}
           title="Drag to resize · [ ] keys · \ to reset"
         >
-          <div className="absolute inset-y-0 -left-1 -right-1" /> {/* wider hit area */}
-          <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ background: 'var(--accent)' }}
-          />
+          {/* Grip lines */}
+          <div className="flex gap-[2px] h-8 items-center px-[2px] opacity-30 group-hover:opacity-100 transition-opacity">
+            <div className="w-[1px] h-full bg-accent"></div>
+            <div className="w-[1px] h-full bg-accent"></div>
+          </div>
+          <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent" />
         </div>
 
         <div
-          className="min-w-0 overflow-hidden flex flex-col flex-1"
-          style={{ background: 'var(--bg-base)' }}
+          className="min-w-0 overflow-hidden flex flex-col flex-1 relative glass-panel tech-border"
+          style={{ background: 'var(--bg-surface)' }}
         >
+          <div className="absolute top-0 right-0 w-full h-1 bg-accent opacity-20"></div>
           {rightPane}
         </div>
       </div>
 
       {/* Mobile: tabbed panes */}
-      <div className="flex md:hidden flex-col h-full w-full">
-        <div className="flex shrink-0 border-b" role="tablist" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+      <div className="flex md:hidden flex-col h-full w-full border-dim bg-base brutal-border">
+        <div className="flex shrink-0 border-b border-dim bg-surface" role="tablist">
           <button
             role="tab"
             onClick={() => setActivePane('right')}
-            aria-label="Switch to chat pane"
-            aria-selected={activePane === 'right'}
-            className="flex-1 py-2.5 text-xs font-semibold transition-colors"
-            style={{
-              color: activePane === 'right' ? 'var(--accent)' : 'var(--text-muted)',
-              borderBottom: activePane === 'right' ? '2px solid var(--accent)' : '2px solid transparent',
-            }}
+            className={`flex-1 py-3 text-xs uppercase tracking-widest transition-all ${
+              activePane === 'right' ? 'text-accent border-b-2 border-accent bg-elevated' : 'text-dim hover:text-primary'
+            }`}
           >
-            Chat
+            [ AI Tutor ]
           </button>
           <button
             role="tab"
             onClick={() => setActivePane('left')}
-            aria-label="Switch to PDF pane"
-            aria-selected={activePane === 'left'}
-            className="flex-1 py-2.5 text-xs font-semibold transition-colors"
-            style={{
-              color: activePane === 'left' ? 'var(--accent)' : 'var(--text-muted)',
-              borderBottom: activePane === 'left' ? '2px solid var(--accent)' : '2px solid transparent',
-            }}
+            className={`flex-1 py-3 text-xs uppercase tracking-widest transition-all border-l border-dim ${
+              activePane === 'left' ? 'text-accent border-b-2 border-accent bg-elevated' : 'text-dim hover:text-primary'
+            }`}
           >
-            PDF
+            [ Document ]
           </button>
         </div>
-        <div className="flex-1 overflow-hidden" role="tabpanel" style={{ background: 'var(--bg-base)' }}>
+        <div className="flex-1 overflow-hidden" role="tabpanel">
           {activePane === 'left' ? leftPane : rightPane}
         </div>
       </div>

@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+const code = `
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -47,7 +49,7 @@ export function PdfViewer({ chapterId, currentPage }: PdfViewerProps) {
     );
   }
 
-  const pdfUrl = `/api/pdfs/file/${chapterId}#page=${currentPage + 1}&toolbar=0&navpanes=0`;
+  const pdfUrl = \`/api/pdfs/file/\${chapterId}#page=\${currentPage + 1}&toolbar=0&navpanes=0\`;
 
   return (
     <div className="h-full w-full flex flex-col p-4 bg-base font-mono relative overflow-hidden">
@@ -99,3 +101,7 @@ export function PdfViewer({ chapterId, currentPage }: PdfViewerProps) {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/ui/PdfViewer.tsx', code);
+console.log('PdfViewer successfully updated');
