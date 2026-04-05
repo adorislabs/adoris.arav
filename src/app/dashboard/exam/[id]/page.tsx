@@ -7,7 +7,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import Link from 'next/link';
 import { loadSession } from '@/lib/session/sessionStore';
-import type { Exam, ExamQuestion, ExamSection } from '@/lib/llm/examGenerator';
+import type { Exam, ExamQuestion, ExamSection, WrittenGrade } from '@/lib/llm/examGenerator';
 
 type AnswerState = Record<number, { selected?: number; text?: string; answered: boolean }>;
 type PastAttempt = { id: string; student_name: string; score: number; total_marks: number; attempt_number: number; time_taken_seconds: number; created_at: string };
@@ -25,6 +25,8 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60 * 60);
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [writtenGrades, setWrittenGrades] = useState<WrittenGrade[]>([]);
+  const [gradingWritten, setGradingWritten] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
   // Ref pointing to the latest handleSubmitExam — allows the timer to call it
@@ -261,18 +263,37 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
     // Record time on the last active question before submitting
     recordQuestionTime();
 
+    // Compute MCQ score now (before setSubmitted, since scoreResult depends on submitted state)
+    let mcqEarned = 0;
+    let qIdx = 0;
+    const perSection: { name: string; earned: number; total: number }[] = [];
+    if (exam) {
+      exam.sections.forEach((sec) => {
+        let secEarned = 0;
+        const secTotal = sec.marks_per_question * sec.questions.length;
+        sec.questions.forEach((q) => {
+          const ans = answers[qIdx];
+          if (ans?.answered && (q.type === 'mcq' || q.type === 'true_false')) {
+            if (ans.selected === q.correct_index) { secEarned += q.marks; mcqEarned += q.marks; }
+          }
+          qIdx++;
+        });
+        perSection.push({ name: sec.section_name, earned: secEarned, total: secTotal });
+      });
+    }
+
     setSubmitted(true);
     setShowAnswerKey(true);
     if (timerRef.current) clearInterval(timerRef.current);
-    // Save results to API
+    // Save results to API and collect LLM-graded written scores
     if (exam) {
       const timeTaken = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      const result = scoreResult ?? { earned: 0, total: exam.total_marks || 50, perSection: [] };
-      const sectionScores = result.perSection.reduce((acc, s) => {
+      const sectionScores = perSection.reduce((acc, s) => {
         acc[s.name] = { earned: s.earned, total: s.total };
         return acc;
       }, {} as Record<string, { earned: number; total: number }>);
 
+      setGradingWritten(true);
       fetch('/api/exams/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -281,8 +302,8 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
           studentName: studentName || 'Student',
           examData: exam,
           answers,
-          score: result.earned,
-          totalMarks: result.total,
+          score: mcqEarned,
+          totalMarks: exam.total_marks || 60,
           timeTaken,
           sectionScores,
           questionTimings: questionTimingsRef.current,
@@ -292,9 +313,15 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
             total_tab_switches: tabSwitchesRef.current,
           },
         }),
-      }).catch(() => { /* fire and forget */ });
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data.writtenGrades)) setWrittenGrades(data.writtenGrades);
+        })
+        .catch(() => { /* ignore — MCQ results are already displayed */ })
+        .finally(() => setGradingWritten(false));
     }
-  }, [exam, scoreResult, id, studentName, answers, recordQuestionTime]);
+  }, [exam, id, studentName, answers, recordQuestionTime]);
 
   // Keep the ref in sync so the timer can call the latest version
   useEffect(() => {
@@ -447,32 +474,50 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   // ─── Results Screen ───────────────────────────────────────────────────
   if (submitted && showAnswerKey) {
     const result = calculateScore();
-    const pct = Math.round((result.earned / result.total) * 100);
+    const writtenScore = writtenGrades.reduce((sum, g) => sum + g.marks_awarded, 0);
+    const totalScore = result.earned + writtenScore;
+    const pct = Math.round((totalScore / result.total) * 100);
+    const writtenGradeMap = new Map(writtenGrades.map((g) => [g.question_number, g]));
 
     return (
       <div className="flex flex-col min-h-full p-4 sm:p-8 overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
         <div className="max-w-2xl mx-auto w-full">
           <div className="rounded-2xl shadow-xl p-8 border mb-6" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4`} style={{ background: pct >= 70 ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)' }}>
-              <span className="text-2xl">{pct >= 70 ? '🏆' : '📚'}</span>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4`} style={{ background: pct >= 40 ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)' }}>
+              <span className="text-2xl">{pct >= 40 ? '🏆' : '📚'}</span>
             </div>
             <h2 className="text-2xl font-bold text-center mb-1" style={{ color: 'var(--text-primary)' }}>Exam Complete</h2>
-            <p className="text-center text-lg font-medium mb-6" style={{ color: 'var(--text-secondary)' }}>
-              MCQ Score: <span className={`font-bold`} style={{ color: pct >= 70 ? 'var(--success)' : 'var(--warning)' }}>{result.earned}/{result.total}</span>
+            <p className="text-center text-3xl font-bold mb-1" style={{ color: pct >= 40 ? 'var(--success)' : 'var(--warning)' }}>
+              {totalScore}/{result.total}
             </p>
+            <p className="text-center text-sm mb-6" style={{ color: 'var(--text-muted)' }}>{pct}% — {pct >= 40 ? 'Passed' : 'Below pass mark (40%)'}</p>
 
-            <div className="space-y-2 mb-6">
-              {result.perSection.map((sec, idx) => (
-                <div key={idx} className="flex justify-between items-center text-sm border-b pb-2" style={{ borderColor: 'var(--border-soft)' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>{sec.name}</span>
-                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{sec.earned}/{sec.total}</span>
-                </div>
-              ))}
+            {/* Score breakdown */}
+            <div className="rounded-xl border p-4 mb-4 space-y-2" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-soft)' }}>
+              <div className="flex justify-between text-sm">
+                <span style={{ color: 'var(--text-secondary)' }}>MCQ / True-False (auto-graded)</span>
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{result.earned} marks</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  Written Answers (LLM-graded)
+                  {gradingWritten && <span className="ml-2 text-xs animate-pulse" style={{ color: 'var(--accent)' }}>grading...</span>}
+                </span>
+                <span className="font-semibold" style={{ color: gradingWritten ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                  {gradingWritten ? '…' : `${writtenScore} marks`}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm border-t pt-2" style={{ borderColor: 'var(--border-soft)' }}>
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Total</span>
+                <span className="font-bold" style={{ color: pct >= 40 ? 'var(--success)' : 'var(--warning)' }}>{gradingWritten ? `${result.earned}+ /` : `${totalScore}/`}{result.total}</span>
+              </div>
             </div>
 
-            <p className="text-xs text-center mb-4" style={{ color: 'var(--text-muted)' }}>
-              Note: Only MCQ and True/False questions are auto-graded. Review answer keys below for written answers.
-            </p>
+            {gradingWritten && (
+              <p className="text-xs text-center mb-4 animate-pulse" style={{ color: 'var(--accent)' }}>
+                LLM is grading your written answers — results will appear shortly...
+              </p>
+            )}
           </div>
 
           {/* Answer Key for All Questions */}
@@ -480,30 +525,48 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
           {exam.sections.map((sec, sIdx) => (
             <div key={sIdx} className="mb-6">
               <h4 className="text-sm font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--accent)' }}>{sec.section_name}</h4>
-              {sec.questions.map((q, qIdx) => (
-                <div key={qIdx} className="rounded-xl border p-5 mb-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
-                      Q{q.question_number} · {q.marks}m
-                    </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      q.difficulty === 'very_hard' ? 'bg-red-900/40 text-red-400' :
-                      q.difficulty === 'hard' ? 'bg-amber-900/40 text-amber-400' :
-                      'bg-green-900/40 text-green-400'
-                    }`}>{q.difficulty?.toUpperCase()}</span>
-                  </div>
-                  <div className="prose prose-sm max-w-none mb-3" style={{ color: 'var(--text-primary)' }}>
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.question_text}</ReactMarkdown>
-                  </div>
-                  <div className="rounded-lg p-4 border" style={{ background: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.2)' }}>
-                    <p className="text-xs font-semibold mb-1" style={{ color: 'var(--success)' }}>Answer Key:</p>
-                    <div className="prose prose-sm max-w-none" style={{ color: 'var(--success)' }}>
-                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.answer_key}</ReactMarkdown>
+              {sec.questions.map((q, qIdx) => {
+                const isWritten = q.type !== 'mcq' && q.type !== 'true_false';
+                const grade = writtenGradeMap.get(q.question_number);
+                return (
+                  <div key={qIdx} className="rounded-xl border p-5 mb-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
+                        Q{q.question_number} · {q.marks}m
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        q.difficulty === 'very_hard' ? 'bg-red-900/40 text-red-400' :
+                        q.difficulty === 'hard' ? 'bg-amber-900/40 text-amber-400' :
+                        'bg-green-900/40 text-green-400'
+                      }`}>{q.difficulty?.toUpperCase()}</span>
+                      {isWritten && grade && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full ml-auto" style={{ background: 'rgba(99,102,241,0.15)', color: 'rgb(129,140,248)' }}>
+                          LLM: {grade.marks_awarded}/{grade.max_marks}
+                        </span>
+                      )}
+                      {isWritten && gradingWritten && !grade && (
+                        <span className="text-xs px-2 py-0.5 rounded-full ml-auto animate-pulse" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>grading…</span>
+                      )}
                     </div>
-                    <p className="text-xs mt-2 italic" style={{ color: 'rgba(34,197,94,0.6)' }}>Marking: {q.marking_scheme}</p>
+                    <div className="prose prose-sm max-w-none mb-3" style={{ color: 'var(--text-primary)' }}>
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.question_text}</ReactMarkdown>
+                    </div>
+                    <div className="rounded-lg p-4 border" style={{ background: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.2)' }}>
+                      <p className="text-xs font-semibold mb-1" style={{ color: 'var(--success)' }}>Answer Key:</p>
+                      <div className="prose prose-sm max-w-none" style={{ color: 'var(--success)' }}>
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.answer_key}</ReactMarkdown>
+                      </div>
+                      <p className="text-xs mt-2 italic" style={{ color: 'rgba(34,197,94,0.6)' }}>Marking: {q.marking_scheme}</p>
+                    </div>
+                    {isWritten && grade && (
+                      <div className="mt-3 rounded-lg p-3 border" style={{ background: 'rgba(99,102,241,0.08)', borderColor: 'rgba(99,102,241,0.2)' }}>
+                        <p className="text-xs font-semibold mb-1" style={{ color: 'rgb(129,140,248)' }}>LLM Feedback ({grade.marks_awarded}/{grade.max_marks} marks):</p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{grade.feedback}</p>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ))}
 

@@ -68,7 +68,15 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
       }
 
       const localSession = loadSession(id);
-      const sessionToUse = cloudSession || localSession;
+      // Prefer whichever copy was updated more recently; fall back to whichever exists
+      let sessionToUse: SessionState | null;
+      if (cloudSession && localSession) {
+        const cloudTime = new Date(cloudSession.lastUpdated || 0).getTime();
+        const localTime = new Date(localSession.lastUpdated || 0).getTime();
+        sessionToUse = cloudTime >= localTime ? cloudSession : localSession;
+      } else {
+        sessionToUse = cloudSession || localSession;
+      }
 
       if (sessionToUse && !sessionToUse.quizCompleted) {
         // Restore chapter plan if missing (now cached in DB → fast DB read)

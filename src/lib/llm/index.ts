@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { tutorConfig, getTutorPersonalityBlock } from '@/config/tutorConfig';
 import { config } from '@/config';
+import { withTimeout } from './timeout';
 
 interface ChatMessage {
   role: string;
@@ -120,10 +121,10 @@ ${trimmedHistory.map((m: ChatMessage) => `${m.role}: ${m.content}`).join('\n')}
 
 STUDENT MESSAGE: ${message}
 `;
-    const response = await ai.models.generateContent({
-      model: tutorConfig.tutorModel,
-      contents: prompt,
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({ model: tutorConfig.tutorModel, contents: prompt }),
+      30_000, 'askTutor'
+    );
     
     return { success: true, text: response.text || 'Kuch technical error aayi hai. Wapas try karo!' };
   } catch (error) {
@@ -162,13 +163,14 @@ CHAT TRANSCRIPT:
 ${JSON.stringify(trimmed)}
 `;
 
-    const response = await ai.models.generateContent({
-      model: tutorConfig.observerModel,  // Uses Flash-Lite (cheaper)
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      }
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: tutorConfig.observerModel,
+        contents: prompt,
+        config: { responseMimeType: 'application/json' },
+      }),
+      20_000, 'extractMasteryData'
+    );
 
     return JSON.parse(response.text || '{}');
   } catch (error) {

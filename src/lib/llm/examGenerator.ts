@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { tutorConfig } from '@/config/tutorConfig';
 import type { ChapterPlan, LessonPlan } from '@/lib/session/sessionStore';
+import { withTimeout } from './timeout';
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -174,20 +175,113 @@ JSON Output:
 }
 `;
 
-  const response = await ai.models.generateContent({
-    model: tutorConfig.examModel,
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  });
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: tutorConfig.examModel,
+      contents: prompt,
+      config: { responseMimeType: 'application/json' },
+    }),
+    60_000, 'generateExam'
+  );
 
   try {
     return JSON.parse(response.text || '{}') as Exam;
   } catch {
-    // Fallback: extract first JSON object from response
     const match = (response.text || '').match(/\{[\s\S]*\}/);
     if (match) return JSON.parse(match[0]) as Exam;
     throw new Error('Exam generator returned unparseable JSON');
+  }
+}
+
+// ─── Written Answer Grader ─────────────────────────────────────────────────
+
+export interface WrittenGrade {
+  question_number: number;
+  marks_awarded: number;
+  max_marks: number;
+  feedback: string;
+}
+
+/**
+ * Grades all non-MCQ/True-False questions in one batched LLM call.
+ * Returns an array of WrittenGrade results, one per written question.
+ */
+export async function gradeWrittenAnswers(
+  exam: Exam,
+  answers: Record<number, { selected?: number; text?: string; answered: boolean }>
+): Promise<WrittenGrade[]> {
+  // Collect written questions with their global index
+  const writtenItems: {
+    globalIdx: number;
+    q: ExamQuestion;
+    studentAnswer: string;
+  }[] = [];
+
+  let globalIdx = 0;
+  for (const sec of exam.sections) {
+    for (const q of sec.questions) {
+      if (q.type !== 'mcq' && q.type !== 'true_false') {
+        const ans = answers[globalIdx];
+        writtenItems.push({
+          globalIdx,
+          q,
+          studentAnswer: ans?.text?.trim() || '',
+        });
+      }
+      globalIdx++;
+    }
+  }
+
+  if (writtenItems.length === 0) return [];
+
+  const prompt = `
+You are a strict but fair exam marker. Grade each written student answer below.
+
+For each question:
+1. Compare the student answer to the answer_key and marking_scheme.
+2. Award partial marks generously where working is correct even if the final answer is slightly off.
+3. Give 0 marks only if the answer is blank, completely wrong, or gibberish.
+4. Keep feedback concise (1–2 sentences).
+
+Questions to grade:
+${writtenItems.map((item, i) => `
+Q${i + 1}: Question ${item.q.question_number} (${item.q.marks} marks) — Topic: ${item.q.topic}
+Question: ${item.q.question_text}
+Answer Key: ${item.q.answer_key}
+Marking Scheme: ${item.q.marking_scheme}
+Student's Answer: ${item.studentAnswer || '[No answer provided]'}
+`).join('\n---\n')}
+
+Return ONLY valid JSON — an array with exactly ${writtenItems.length} objects:
+[
+  { "question_number": <number>, "marks_awarded": <0..max>, "max_marks": <max>, "feedback": "<1-2 sentence feedback>" }
+]
+`;
+
+  try {
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: tutorConfig.examModel,
+        contents: prompt,
+        config: { responseMimeType: 'application/json' },
+      }),
+      45_000, 'gradeWrittenAnswers'
+    );
+
+    const parsed = JSON.parse(response.text || '[]');
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.map((g: any, i: number) => ({
+      question_number: writtenItems[i]?.q.question_number ?? g.question_number,
+      marks_awarded: Math.min(
+        Math.max(0, Number(g.marks_awarded) || 0),
+        writtenItems[i]?.q.marks ?? 0
+      ),
+      max_marks: writtenItems[i]?.q.marks ?? 0,
+      feedback: typeof g.feedback === 'string' ? g.feedback : '',
+    }));
+  } catch (err) {
+    console.error('[gradeWrittenAnswers] Failed:', err);
+    return [];
   }
 }

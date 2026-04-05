@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { gradeWrittenAnswers } from '@/lib/llm/examGenerator';
+import type { WrittenGrade } from '@/lib/llm/examGenerator';
 
 /**
  * POST /api/exams/submit
@@ -17,6 +19,19 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Grade written (non-MCQ) answers via LLM — wrapped in try/catch so a
+    // grading failure never blocks the result from being saved.
+    let writtenGrades: WrittenGrade[] = [];
+    let writtenScore = 0;
+    try {
+      writtenGrades = await gradeWrittenAnswers(examData, answers || {});
+      writtenScore = writtenGrades.reduce((sum, g) => sum + g.marks_awarded, 0);
+    } catch (err) {
+      console.error('[submit] LLM grading failed (saving MCQ score only):', err);
+    }
+
+    const totalScore = (score || 0) + writtenScore;
+
     // Get the next attempt number
     const { count } = await supabase
       .from('exam_results')
@@ -32,11 +47,8 @@ export async function POST(req: Request) {
       .flatMap((s: any) => s.questions || [])
       .filter((q: any) => q.type === 'mcq' || q.type === 'true_false')
       .reduce((sum: number, q: any) => sum + (q.marks || 1), 0);
-    // Pass at 40% of the auto-gradeable portion (not the full 60-mark total,
-    // since written answers can't be auto-graded and would make passing impossible)
-    const passThreshold = autoGradeableMarks > 0
-      ? Math.ceil(autoGradeableMarks * 0.4)
-      : Math.ceil((totalMarks || 60) * 0.4);
+    // Pass at 40% of total available marks (now includes LLM-graded written score)
+    const passThreshold = Math.ceil((totalMarks || 60) * 0.4);
 
     const { data, error } = await supabase
       .from('exam_results')
@@ -46,9 +58,9 @@ export async function POST(req: Request) {
         student_name: studentName || '',
         exam_data: examData,
         answers: answers || {},
-        score: score || 0,
+        score: totalScore,
         total_marks: totalMarks || 60,
-        passed: (score || 0) >= passThreshold, // 40% pass threshold
+        passed: totalScore >= passThreshold, // 40% pass threshold
         attempt_number: attemptNumber,
         section_scores: sectionScores || [],
         time_taken_seconds: timeTaken || 0,
@@ -64,7 +76,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, resultId: data.id, attemptNumber: data.attempt_number });
+    return NextResponse.json({
+      success: true,
+      resultId: data.id,
+      attemptNumber: data.attempt_number,
+      writtenGrades,
+      mcqScore: score || 0,
+      writtenScore,
+      totalScore,
+    });
   } catch (error) {
     console.error('Exam submit API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

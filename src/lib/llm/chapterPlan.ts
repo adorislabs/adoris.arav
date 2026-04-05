@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import type { ChapterPlan } from '@/lib/session/sessionStore';
+import { withTimeout } from './timeout';
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -58,26 +59,22 @@ ONLY extract topics from pages that contain actual SUBJECT-MATTER educational co
 DO NOT wrap the JSON in markdown blocks. Return ONLY raw JSON.
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'models/gemini-2.5-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: 'application/pdf',
-                data: base64Pdf,
-              },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: 'models/gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: 'application/pdf', data: base64Pdf } },
+            ],
+          },
+        ],
+        config: { responseMimeType: 'application/json' },
+      }),
+      120_000, 'generateChapterPlan'
+    );
 
     const outputText = response.text || '{}';
     return JSON.parse(outputText) as ChapterPlan;

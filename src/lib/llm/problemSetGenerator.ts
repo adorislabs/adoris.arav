@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { tutorConfig } from '@/config/tutorConfig';
 import type { PracticeTopic, PagePlanEntry } from '@/lib/session/sessionStore';
+import { withTimeout } from './timeout';
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -206,13 +207,14 @@ JSON Output:
 Output the problems IN ORDER: foundation first, then easy, medium, hard, exam_level last.
 `;
 
-  const response = await ai.models.generateContent({
-    model: tutorConfig.examModel,
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  });
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: tutorConfig.examModel,
+      contents: prompt,
+      config: { responseMimeType: 'application/json' },
+    }),
+    60_000, 'generateProblemSet'
+  );
 
   let normalized = normalizeProblemSet(toParsedJson(response.text || '{}'), topic, chapterTitle);
 
@@ -243,13 +245,14 @@ Schema:
 Use topic: "${topic}", chapter: "${chapterTitle}", concepts: ${JSON.stringify(keyConcepts)}.
 `;
 
-    const retryResponse = await ai.models.generateContent({
-      model: tutorConfig.examModel,
-      contents: retryPrompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
+    const retryResponse = await withTimeout(
+      ai.models.generateContent({
+        model: tutorConfig.examModel,
+        contents: retryPrompt,
+        config: { responseMimeType: 'application/json' },
+      }),
+      60_000, 'generateProblemSet-retry'
+    );
 
     normalized = normalizeProblemSet(toParsedJson(retryResponse.text || '{}'), topic, chapterTitle);
   }
@@ -319,11 +322,14 @@ Return ONLY valid JSON:
 }
 `;
 
-  const response = await ai.models.generateContent({
-    model: tutorConfig.observerModel,
-    contents: prompt,
-    config: { responseMimeType: 'application/json' },
-  });
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: tutorConfig.observerModel,
+      contents: prompt,
+      config: { responseMimeType: 'application/json' },
+    }),
+    20_000, 'generatePracticeTopics'
+  );
 
   try {
     const parsed = toParsedJson(response.text || '{}');

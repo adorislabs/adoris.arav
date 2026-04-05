@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import type { PagePlanEntry } from '@/lib/session/sessionStore';
+import { withTimeout } from './timeout';
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -61,26 +62,22 @@ DO NOT wrap the JSON in markdown blocks like \`\`\`json. Return ONLY raw JSON te
 Ensure LaTeX escapes are properly handled in the string (e.g., \\\\frac).
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'models/gemini-2.5-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: prompt },
-            { 
-               inlineData: { 
-                 mimeType: 'application/pdf', 
-                 data: base64Pdf 
-               } 
-            }
-          ]
-        }
-      ],
-      config: {
-        responseMimeType: 'application/json'
-      }
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: 'models/gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: 'application/pdf', data: base64Pdf } },
+            ],
+          },
+        ],
+        config: { responseMimeType: 'application/json' },
+      }),
+      45_000, 'ocrPdfPage'
+    );
 
     let outputText = response.text || '{}';
     // Clean markdown wrappers
