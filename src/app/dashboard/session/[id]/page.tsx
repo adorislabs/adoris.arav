@@ -27,6 +27,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const [session, setSession] = useState<SessionState | null>(null);
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const syncAbortRef = useRef<AbortController | null>(null);
 
   // ─── Phase 1: Fire ALL init fetches in parallel from mount ────────────
@@ -213,6 +214,24 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     );
   };
 
+  // ─── Reset progress (keep chapter plan, clear mastery + chat) ─────────
+  const handleResetProgress = useCallback(() => {
+    if (!session) return;
+    const reset: SessionState = {
+      ...session,
+      currentPage: 0,
+      masteryStatus: {},
+      chatHistories: {},
+      observerStates: {},
+      quizCompleted: false,
+      generatedQuiz: undefined,
+      lastUpdated: new Date().toISOString(),
+    };
+    saveSession(reset);
+    setSession(reset);
+    setShowResetConfirm(false);
+  }, [session]);
+
   // ─── Render by phase ──────────────────────────────────────────────────
 
   if (phase === 'checking' || !fileName) {
@@ -340,6 +359,37 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden" style={{ background: 'var(--bg-base)' }}>
+
+      {/* Reset Progress Confirm Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(16px)' }}>
+          <div className="w-full max-w-sm mx-6 rounded-2xl p-7 border animate-slideUp" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(244,63,94,0.12)' }}>
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="var(--error)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            </div>
+            <h3 className="text-base font-semibold text-center mb-2" style={{ color: 'var(--text-primary)' }}>Reset Session Progress?</h3>
+            <p className="text-sm text-center mb-6" style={{ color: 'var(--text-secondary)' }}>
+              This will clear all mastery marks, chat history, and restart from page 1. Your chapter plan is kept — no regeneration needed.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium border"
+                style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetProgress}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ background: 'var(--error)', color: '#fff' }}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Session Header / Progress */}
       <div className="h-12 border-b flex items-center px-6 shrink-0 justify-between" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
@@ -358,6 +408,17 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
            )}
          </div>
          <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+           {/* Reset progress */}
+           <button
+             onClick={() => setShowResetConfirm(true)}
+             title="Reset session progress"
+             className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-80 mr-1"
+             style={{ color: 'var(--text-muted)' }}
+           >
+             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+               <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+             </svg>
+           </button>
            {/* Sync status indicator */}
            <span className="flex items-center gap-1 mr-2" title={syncStatus === 'synced' ? 'Saved to cloud' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'error' ? 'Sync failed' : ''}>
              {syncStatus === 'syncing' && <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--accent)' }} />}

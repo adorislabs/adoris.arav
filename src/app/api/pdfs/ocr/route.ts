@@ -16,6 +16,14 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Verify chapter ownership (authClient respects RLS) before using service client
+    const { data: ownedChapter } = await supabase
+      .from('chapters')
+      .select('id')
+      .eq('id', chapterId)
+      .single();
+    if (!ownedChapter) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
     // 1. Download buffer for this chapter
     const buffer = await getPdfBufferFromChapterId(chapterId);
 
@@ -33,6 +41,6 @@ export async function POST(req: Request) {
     
   } catch (error) {
     console.error('OCR API Error:', error);
-    return NextResponse.json({ error: 'Failed to process page', details: error?.toString(), stack: (error as any)?.stack }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to process page' }, { status: 500 });
   }
 }

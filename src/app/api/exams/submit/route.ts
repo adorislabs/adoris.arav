@@ -26,6 +26,18 @@ export async function POST(req: Request) {
 
     const attemptNumber = (count || 0) + 1;
 
+    // Compute auto-gradeable marks (only MCQ and True/False are auto-scored;
+    // short-answer and long-answer require human review)
+    const autoGradeableMarks = (examData?.sections || [])
+      .flatMap((s: any) => s.questions || [])
+      .filter((q: any) => q.type === 'mcq' || q.type === 'true_false')
+      .reduce((sum: number, q: any) => sum + (q.marks || 1), 0);
+    // Pass at 40% of the auto-gradeable portion (not the full 60-mark total,
+    // since written answers can't be auto-graded and would make passing impossible)
+    const passThreshold = autoGradeableMarks > 0
+      ? Math.ceil(autoGradeableMarks * 0.4)
+      : Math.ceil((totalMarks || 60) * 0.4);
+
     const { data, error } = await supabase
       .from('exam_results')
       .insert({
@@ -36,7 +48,7 @@ export async function POST(req: Request) {
         answers: answers || {},
         score: score || 0,
         total_marks: totalMarks || 60,
-        passed: score >= (totalMarks * 0.4), // 40% pass threshold
+        passed: (score || 0) >= passThreshold, // 40% pass threshold
         attempt_number: attemptNumber,
         section_scores: sectionScores || [],
         time_taken_seconds: timeTaken || 0,

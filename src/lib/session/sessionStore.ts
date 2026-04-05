@@ -74,6 +74,7 @@ export interface SessionState {
   masteryStatus: Record<number, PageMasteryStatus>;
   observerStates: Record<number, ObserverState>;
   quizCompleted: boolean;
+  generatedQuiz?: unknown; // cached quiz to avoid re-generating on every visit
   lastUpdated: string;
 }
 

@@ -199,16 +199,26 @@ export function ChatInterface({
         onMasteryAchieved();
       }
 
-      if (data.message) {
+      // Support both `messages: string[]` (new) and legacy `message: string`
+      const rawMessages: string[] = Array.isArray(data.messages)
+        ? data.messages
+        : data.message
+        ? [data.message]
+        : [];
+
+      // Stagger each bubble so they arrive as separate thoughts, not a wall of text
+      let currentMsgs = [...newMessages];
+      for (let i = 0; i < rawMessages.length; i++) {
+        if (i > 0) await new Promise<void>(r => setTimeout(r, 160));
         const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: (Date.now() + i + 1).toString(),
           role: 'assistant',
-          content: data.message,
+          content: rawMessages[i],
         };
-        const updatedMsgs = [...newMessages, assistantMessage];
-        setMessages(updatedMsgs);
-        persistMessages(updatedMsgs);
+        currentMsgs = [...currentMsgs, assistantMessage];
+        setMessages([...currentMsgs]);
       }
+      persistMessages(currentMsgs);
 
       // Track struggles from observer data
       if (data.observerData?.confusion_points?.length || data.observerData?.gaps?.length) {
@@ -238,6 +248,14 @@ export function ChatInterface({
       setTimeout(() => textareaRef.current?.focus(), 10);
     }
   };
+
+  // Auto-grow textarea as user types
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+  }, [input]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -315,7 +333,7 @@ export function ChatInterface({
                       <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Preparing your lesson...</span>
                     </div>
                   ) : (
-                    <div className={isUser ? 'text-[15px] leading-relaxed' : 'adoris-prose text-[15px]'}>
+                    <div className={isUser ? 'adoris-user-bubble text-[15px] leading-relaxed' : 'adoris-prose text-[15px]'}>
                       <MemoMarkdown content={msg.content} />
                     </div>
                   )}
@@ -359,7 +377,7 @@ export function ChatInterface({
       {/* Input area */}
       <div className="px-4 md:px-6 py-4 glass-panel border-t border-white/5 z-10 relative">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex items-end gap-3 relative">
-          <div className="flex-1 rounded-2xl border transition-all focus-within:border-[var(--accent)] focus-within:shadow-glow bg-black/40 backdrop-blur-md" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex-1 rounded-2xl border transition-all focus-within:border-[var(--accent)] focus-within:shadow-glow backdrop-blur-md" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
             <textarea
               ref={textareaRef}
               value={input}

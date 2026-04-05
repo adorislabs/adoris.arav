@@ -38,7 +38,7 @@ export async function POST(
       .from('pdfs')
       .download(chapter.storage_path);
 
-    if (downloadError || !fileData) throw downloadError;
+    if (downloadError || !fileData) throw downloadError || new Error('Failed to download PDF');
 
     const arrayBuffer = await fileData.arrayBuffer();
     const base64Pdf = Buffer.from(arrayBuffer).toString('base64');

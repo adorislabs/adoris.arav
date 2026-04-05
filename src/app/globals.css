@@ -197,6 +197,22 @@ h1, h2, h3, h4, h5, h6 {
 }
 .animate-celebrate { animation: celebrate 0.6s ease-out; }
 
+/* ── User bubble — enforce white text on all children (prevents global h1-h6 override) ─ */
+.adoris-user-bubble h1, .adoris-user-bubble h2, .adoris-user-bubble h3,
+.adoris-user-bubble h4, .adoris-user-bubble h5, .adoris-user-bubble h6 {
+  color: inherit;
+  font-family: var(--font-sans);
+  font-size: 1em;
+}
+.adoris-user-bubble p { margin: 0; }
+.adoris-user-bubble p + p { margin-top: 0.5em; }
+
+/* ── Horizontal scroll edge fade mask ──────────────────────── */
+.mask-edges {
+  mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+}
+
 /* Hint card styling */
 .hint-card {
   background: linear-gradient(135deg, var(--accent-light), var(--bg-surface));

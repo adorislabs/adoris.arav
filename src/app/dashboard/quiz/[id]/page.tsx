@@ -68,12 +68,28 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
     fetchName();
   }, [id]);
 
+  // Mark quiz completed when finished (side-effect, must NOT run during render)
+  useEffect(() => {
+    if (!finished) return;
+    const session = loadSession(id);
+    if (session && !session.quizCompleted) {
+      saveSession({ ...session, quizCompleted: true });
+    }
+  }, [finished, id]);
+
   useEffect(() => {
     if (!fileName) return;
     async function fetchQuiz() {
       try {
         const session = loadSession(id);
-        
+
+        // Use cached quiz if available — avoids a 10-15s LLM call on every visit
+        if (session?.generatedQuiz) {
+          setQuiz(session.generatedQuiz as Quiz);
+          setLoading(false);
+          return;
+        }
+
         const res = await fetch('/api/pdfs/quiz', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -87,6 +103,9 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
         const data = await res.json();
         if (data.success && data.quiz) {
           setQuiz(data.quiz);
+          // Cache the quiz so revisiting this page is instant
+          const latestSession = loadSession(id);
+          if (latestSession) saveSession({ ...latestSession, generatedQuiz: data.quiz });
         }
       } catch (e) {
         console.error('Failed to generate quiz');
@@ -117,12 +136,6 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   if (finished) {
     const percentage = Math.round((score / quiz.questions.length) * 100);
     const passed = percentage >= 70;
-
-    const session = loadSession(id);
-    if (session && !session.quizCompleted) {
-      session.quizCompleted = true;
-      saveSession(session);
-    }
 
     // Group results by topic
     const topicResults: Record<string, { correct: number; total: number }> = {};

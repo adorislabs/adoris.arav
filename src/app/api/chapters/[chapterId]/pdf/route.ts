@@ -31,7 +31,7 @@ export async function GET(
       .from('pdfs')
       .createSignedUrl(chapter.storage_path, 3600);
 
-    if (signedUrlError || !signedUrlData) throw signedUrlError;
+    if (signedUrlError || !signedUrlData) throw signedUrlError || new Error('Failed to create signed URL');
 
     return NextResponse.json({
       success: true,

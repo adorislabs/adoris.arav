@@ -8,9 +8,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ chapterI
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // The passkey gate handles auth, but if there's no anonymous or real session, 
-    // we should still allow public access if that's the intention, but currently 
-    // chapters are tied to users. Let's try fetching the chapter first.
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { data: chapter, error } = await supabase
       .from('chapters')
       .select('chapter_title')

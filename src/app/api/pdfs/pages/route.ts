@@ -17,6 +17,14 @@ export async function GET(req: Request) {
     const { data: { user } } = await authClient.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Verify chapter ownership via RLS-enforced auth client
+    const { data: ownedChapter } = await authClient
+      .from('chapters')
+      .select('id')
+      .eq('id', chapterId)
+      .single();
+    if (!ownedChapter) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
     const supabase = createServiceClient();
 
     // Fast path: page_count already stored in DB

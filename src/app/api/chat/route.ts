@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server';
 
 // Track message count per session for Observer frequency throttling
 const messageCounters = new Map<string, number>();
+// Cap to prevent unbounded growth across long-running processes
+const MAX_COUNTERS = 500;
 
 export async function POST(req: Request) {
   try {
@@ -37,6 +39,11 @@ export async function POST(req: Request) {
     // Call 2: The Hidden Observer — only every Nth message (cost optimization)
     const counterKey = chapterId || 'default';
     const count = (messageCounters.get(counterKey) || 0) + 1;
+    if (messageCounters.size >= MAX_COUNTERS) {
+      // Evict oldest half to prevent unbounded growth
+      const keys = [...messageCounters.keys()].slice(0, MAX_COUNTERS / 2);
+      keys.forEach((k) => messageCounters.delete(k));
+    }
     messageCounters.set(counterKey, count);
 
     let observerData = null;
@@ -55,8 +62,15 @@ export async function POST(req: Request) {
     const responseText = tutorResponse.success ? tutorResponse.text : 'Sorry, taking a moment to process.';
     const mastery_achieved = responseText?.includes('ACHIEVED_MASTERY') || false;
 
+    // Split on [SPLIT] to produce separate chat bubbles
+    const messages = (responseText || '')
+      .split(/\[SPLIT\]/g)
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+
     return NextResponse.json({
-      message: responseText,
+      messages,                                  // preferred: array of bubble segments
+      message: messages[0] || responseText,      // legacy fallback
       mastery_achieved,
       observerData,
     });
