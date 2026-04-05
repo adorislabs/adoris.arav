@@ -32,6 +32,11 @@ export default function LibraryPage() {
   const [uploadForm, setUploadForm] = useState({ chapterNumber: '', chapterTitle: '' });
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Edit book
+  const [editingBook, setEditingBook] = useState<string | null>(null);
+  const [editBookForm, setEditBookForm] = useState({ title: '', subject: '', author: '' });
+  // Delete confirm
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'book' | 'chapter'; id: string; name: string } | null>(null);
 
   const fetchBooks = async () => {
     setLoading(true);
@@ -75,6 +80,35 @@ export default function LibraryPage() {
       } else { setUploadProgress(`Error: ${data.error}`); }
     } catch { setUploadProgress('Upload failed.'); }
     setTimeout(() => setUploadProgress(null), 3000);
+  };
+
+  const handleEditBook = async (bookId: string) => {
+    if (!editBookForm.title || !editBookForm.subject) return;
+    try {
+      const res = await fetch(`/api/books/${bookId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editBookForm),
+      });
+      const data = await res.json();
+      if (data.success) { setEditingBook(null); fetchBooks(); }
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteBook = async (bookId: string) => {
+    try {
+      const res = await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) { setConfirmDelete(null); fetchBooks(); }
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteChapter = async (chapterId: string) => {
+    try {
+      const res = await fetch(`/api/chapters/${chapterId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) { setConfirmDelete(null); fetchBooks(); }
+    } catch { /* ignore */ }
   };
 
   return (
@@ -144,23 +178,60 @@ export default function LibraryPage() {
               <div key={book.id} className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
                 {/* Book header */}
                 <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: 'var(--border)' }}>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{book.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
-                        {book.subject}
-                      </span>
-                      {book.author && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>by {book.author}</span>}
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{book.chapters.length} chapter{book.chapters.length !== 1 ? 's' : ''}</span>
-                    </div>
+                  <div className="flex-1 min-w-0">
+                    {editingBook === book.id ? (
+                      <div className="space-y-2">
+                        <input value={editBookForm.title} onChange={e => setEditBookForm({ ...editBookForm, title: e.target.value })}
+                          placeholder="Title" style={{ ...inputStyle, padding: '6px 10px', fontSize: '12px' }} />
+                        <div className="flex gap-2">
+                          <input value={editBookForm.subject} onChange={e => setEditBookForm({ ...editBookForm, subject: e.target.value })}
+                            placeholder="Subject" style={{ ...inputStyle, padding: '6px 10px', fontSize: '12px' }} />
+                          <input value={editBookForm.author} onChange={e => setEditBookForm({ ...editBookForm, author: e.target.value })}
+                            placeholder="Author" style={{ ...inputStyle, padding: '6px 10px', fontSize: '12px' }} />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleEditBook(book.id)} className="text-[10px] px-3 py-1 rounded-lg font-semibold" style={{ background: 'var(--accent)', color: '#0c0c0e' }}>Save</button>
+                          <button onClick={() => setEditingBook(null)} className="text-[10px] px-3 py-1 rounded-lg font-medium" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{book.title}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
+                            {book.subject}
+                          </span>
+                          {book.author && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>by {book.author}</span>}
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{book.chapters.length} chapter{book.chapters.length !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => setUploadingFor(uploadingFor === book.id ? null : book.id)}
-                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
-                    style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                  >
-                    + Upload
-                  </button>
+                  <div className="flex items-center gap-2 ml-3">
+                    {editingBook !== book.id && (
+                      <>
+                        <button
+                          onClick={() => { setEditingBook(book.id); setEditBookForm({ title: book.title, subject: book.subject, author: book.author }); }}
+                          className="text-xs px-2 py-1.5 rounded-lg font-medium transition-colors"
+                          style={{ color: 'var(--text-muted)' }}
+                          title="Edit book"
+                        >✏️</button>
+                        <button
+                          onClick={() => setConfirmDelete({ type: 'book', id: book.id, name: book.title })}
+                          className="text-xs px-2 py-1.5 rounded-lg font-medium transition-colors"
+                          style={{ color: 'var(--text-muted)' }}
+                          title="Delete book"
+                        >🗑️</button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => setUploadingFor(uploadingFor === book.id ? null : book.id)}
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+                      style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                    >
+                      + Upload
+                    </button>
+                  </div>
                 </div>
 
                 {/* Upload form */}
@@ -230,6 +301,12 @@ export default function LibraryPage() {
                             style={{ background: 'var(--bg-muted)', color: 'var(--text-primary)' }}>
                             Study →
                           </Link>
+                          <button
+                            onClick={() => setConfirmDelete({ type: 'chapter', id: ch.id, name: ch.chapter_title })}
+                            className="text-xs px-1.5 py-1.5 rounded-lg font-medium transition-colors opacity-40 hover:opacity-100"
+                            style={{ color: 'var(--text-muted)' }}
+                            title="Delete chapter"
+                          >🗑️</button>
                         </div>
                       </div>
                     ))}
@@ -240,6 +317,39 @@ export default function LibraryPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(12,12,14,0.85)', backdropFilter: 'blur(20px)' }}>
+          <div className="w-full max-w-sm mx-6 rounded-2xl p-7 animate-slideUp" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(244,63,94,0.12)' }}>
+              <span className="text-xl">⚠️</span>
+            </div>
+            <h2 className="text-base font-semibold text-center mb-2" style={{ color: 'var(--text-primary)' }}>
+              Delete {confirmDelete.type === 'book' ? 'Book' : 'Chapter'}?
+            </h2>
+            <p className="text-sm text-center mb-5" style={{ color: 'var(--text-secondary)' }}>
+              &ldquo;{confirmDelete.name}&rdquo; {confirmDelete.type === 'book' ? 'and all its chapters ' : ''}will be permanently deleted.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => confirmDelete.type === 'book' ? handleDeleteBook(confirmDelete.id) : handleDeleteChapter(confirmDelete.id)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ background: 'var(--error)', color: '#fff' }}
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

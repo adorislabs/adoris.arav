@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { gradeWrittenAnswers } from '@/lib/llm/examGenerator';
+import { gradeWrittenAnswers, autoGradeMCQ } from '@/lib/llm/examGenerator';
 import type { WrittenGrade } from '@/lib/llm/examGenerator';
 
 /**
@@ -9,7 +9,7 @@ import type { WrittenGrade } from '@/lib/llm/examGenerator';
  */
 export async function POST(req: Request) {
   try {
-    const { chapterId, studentName, examData, answers, score, totalMarks, sectionScores, timeTaken, questionTimings, tabSwitches, integrityFlags } = await req.json();
+    const { chapterId, studentName, examData, answers, totalMarks, sectionScores, timeTaken, questionTimings, tabSwitches, integrityFlags } = await req.json();
 
     if (!chapterId || !examData) {
       return NextResponse.json({ error: 'chapterId and examData required' }, { status: 400 });
@@ -30,7 +30,9 @@ export async function POST(req: Request) {
       console.error('[submit] LLM grading failed (saving MCQ score only):', err);
     }
 
-    const totalScore = (score || 0) + writtenScore;
+    // Server-side MCQ auto-grading — authoritative, does not trust client score
+    const mcqScore = autoGradeMCQ(examData, answers || {});
+    const totalScore = mcqScore + writtenScore;
 
     // Get the next attempt number
     const { count } = await supabase
@@ -41,12 +43,6 @@ export async function POST(req: Request) {
 
     const attemptNumber = (count || 0) + 1;
 
-    // Compute auto-gradeable marks (only MCQ and True/False are auto-scored;
-    // short-answer and long-answer require human review)
-    const autoGradeableMarks = (examData?.sections || [])
-      .flatMap((s: any) => s.questions || [])
-      .filter((q: any) => q.type === 'mcq' || q.type === 'true_false')
-      .reduce((sum: number, q: any) => sum + (q.marks || 1), 0);
     // Pass at 40% of total available marks (now includes LLM-graded written score)
     const passThreshold = Math.ceil((totalMarks || 60) * 0.4);
 
@@ -81,7 +77,7 @@ export async function POST(req: Request) {
       resultId: data.id,
       attemptNumber: data.attempt_number,
       writtenGrades,
-      mcqScore: score || 0,
+      mcqScore,
       writtenScore,
       totalScore,
     });
@@ -92,21 +88,38 @@ export async function POST(req: Request) {
 }
 
 /**
- * GET /api/exams/submit?chapterId=xxx
- * Returns all exam attempts for a chapter
+ * GET /api/exams/submit?chapterId=xxx  — list all attempts
+ * GET /api/exams/submit?id=xxx         — fetch a single attempt for review
  */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
+    const attemptId = searchParams.get('id');
     const chapterId = searchParams.get('chapterId');
-
-    if (!chapterId) {
-      return NextResponse.json({ error: 'chapterId required' }, { status: 400 });
-    }
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Single attempt detail — for review mode
+    if (attemptId) {
+      const { data, error } = await supabase
+        .from('exam_results')
+        .select('id, student_name, exam_data, answers, score, total_marks, passed, attempt_number, section_scores, time_taken_seconds, question_timings, tab_switches, completed_at')
+        .eq('id', attemptId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (error || !data) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+
+      return NextResponse.json({ success: true, attempt: data });
+    }
+
+    if (!chapterId) {
+      return NextResponse.json({ error: 'chapterId or id required' }, { status: 400 });
+    }
 
     const { data, error } = await supabase
       .from('exam_results')

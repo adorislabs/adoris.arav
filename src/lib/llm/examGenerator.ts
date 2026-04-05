@@ -128,12 +128,12 @@ Section B — 2-Mark Questions (5 questions × 2 marks = 10 marks)
 - Requires working or justification (not just a term)
 
 Section C — 3-Mark Questions (5 questions × 3 marks = 15 marks)
-- Types: Application-based, multi-step numerical, diagram reasoning
+- Types: short_answer, numerical, long_answer — application-based and multi-step problems
 - Difficulty: hard → very_hard
 - Full step-by-step working needed
 
 Section D — 5-Mark Questions (5 questions × 5 marks = 25 marks)
-- Types: Long answer, derivation, proof, multi-part problems
+- Types: long_answer, proof, numerical — multi-part derivations and explanations
 - Difficulty: very_hard
 - Detailed working + conceptual explanation required
 
@@ -146,6 +146,10 @@ CRITICAL RULES:
 4. Each MCQ must have exactly 4 plausible options (no obviously wrong answers)
 5. answer_key must show COMPLETE step-by-step working with each step labeled
 6. marking_scheme must show step-wise marks (e.g., "1M formula, 1M substitution, 1M answer")
+7. The "type" field MUST be one of EXACTLY these values: "mcq", "true_false", "short_answer", "long_answer", "numerical", "proof". Do NOT use any other type.
+8. NEVER ask students to "draw", "sketch", "construct a diagram", or produce any visual/hand-drawn output. Students type text answers only. Rephrase any such question as "Describe...", "Explain with steps...", or "Calculate and show working...".
+9. For true_false questions: ALWAYS include "options": ["True", "False"] and set "correct_index" to 0 (True) or 1 (False). Never omit options or use correct_index: -1.
+10. For mcq questions: ALWAYS include 4 options and set correct_index to 0, 1, 2, or 3.
 
 JSON Output:
 {
@@ -184,13 +188,36 @@ JSON Output:
     60_000, 'generateExam'
   );
 
+  let exam: Exam;
   try {
-    return JSON.parse(response.text || '{}') as Exam;
+    exam = JSON.parse(response.text || '{}') as Exam;
   } catch {
     const match = (response.text || '').match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]) as Exam;
-    throw new Error('Exam generator returned unparseable JSON');
+    if (match) exam = JSON.parse(match[0]) as Exam;
+    else throw new Error('Exam generator returned unparseable JSON');
   }
+
+  // ── Post-parse normalization ────────────────────────────────────
+  const VALID_TYPES = new Set(['mcq', 'true_false', 'short_answer', 'long_answer', 'numerical', 'proof']);
+  for (const sec of exam.sections) {
+    for (const q of sec.questions) {
+      // Normalize non-standard types to closest valid type
+      if (!VALID_TYPES.has(q.type)) {
+        q.type = q.marks >= 5 ? 'long_answer' : q.marks >= 3 ? 'short_answer' : 'short_answer';
+      }
+      // Ensure true_false always has options and a valid correct_index
+      if (q.type === 'true_false') {
+        if (!q.options || q.options.length === 0) q.options = ['True', 'False'];
+        if (q.correct_index == null || q.correct_index < 0 || q.correct_index > 1) q.correct_index = 0;
+      }
+      // Ensure MCQ has valid correct_index
+      if (q.type === 'mcq' && q.options && q.options.length > 0) {
+        if (q.correct_index == null || q.correct_index < 0 || q.correct_index >= q.options.length) q.correct_index = 0;
+      }
+    }
+  }
+
+  return exam;
 }
 
 // ─── Written Answer Grader ─────────────────────────────────────────────────
@@ -200,6 +227,33 @@ export interface WrittenGrade {
   marks_awarded: number;
   max_marks: number;
   feedback: string;
+}
+
+/**
+ * Server-side MCQ + True/False auto-grading.
+ * Returns earned marks by re-checking answers against correct_index.
+ * This is authoritative — client-sent score is untrusted.
+ */
+export function autoGradeMCQ(
+  exam: Exam,
+  answers: Record<number, { selected?: number; text?: string; answered: boolean }>
+): number {
+  let earned = 0;
+  let globalIdx = 0;
+  for (const sec of exam.sections) {
+    for (const q of sec.questions) {
+      if (q.type === 'mcq' || q.type === 'true_false') {
+        const ans = answers[globalIdx];
+        if (ans?.answered && ans.selected != null && q.correct_index != null && q.correct_index >= 0) {
+          if (Number(ans.selected) === Number(q.correct_index)) {
+            earned += q.marks;
+          }
+        }
+      }
+      globalIdx++;
+    }
+  }
+  return earned;
 }
 
 /**
